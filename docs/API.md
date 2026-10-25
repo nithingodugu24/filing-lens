@@ -188,3 +188,21 @@ console.log((await response.json()).summary);
 ```
 
 Regenerate the Postman collection with `python scripts/generate_postman.py`. It reads OpenAPI without connecting to or changing a database, groups requests by API tag, stores a returned login token and validates documented JSON response schemas. Choose local PDF file paths and real document/fact IDs before running mutation requests.
+
+## Streaming answers
+
+Both `POST /api/questions` and `POST /api/conversations` support `Accept: text/event-stream` with the same JSON body and bearer authentication as the regular endpoints. Requests without that Accept header retain the existing complete JSON response.
+
+The stream sends SSE frames:
+
+- `status`: a readable message while finding passages, writing and checking sources.
+- `delta`: the next piece of provisional answer text. Append `data.text` to the draft.
+- `draft`: a replacement draft, used when JSON escape decoding revises a partial string.
+- `done`: the normal complete answer object, after citation/quote checks and the database commit. Replace the draft with this result.
+- `error`: a readable `data.message`. Discard the unfinished draft and offer retry.
+
+Comments keep the connection alive while retrieval or the provider is working. The frontend uses fetch streaming so it can POST a question, send the Authorization header and cancel through AbortController. Raw model JSON and reasoning tokens are not displayed. Draft text is explicitly labelled as awaiting source checks; it is not exported or saved as a completed answer.
+
+A cancelled in-progress request rolls back its answer/conversation transaction. Already completed results remain in history. A failed stream is not automatically replayed after partial output, which avoids duplicate text and duplicate paid generations. Nginx buffering is disabled and the stream sends `X-Accel-Buffering: no`.
+
+Streaming improves the time to the first readable text; retrieval and full generation still take their normal time. Checked table figures and local report-context replies can finish immediately without model tokens.

@@ -3061,3 +3061,45 @@ button:active:not(:disabled) {
   display: block;
   margin-bottom: 8px;
 }
+.streaming-answer {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 20px;
+  margin: 20px 0;
+  overflow-wrap: anywhere;
+}
+.streaming-answer .section-title > span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.streaming-answer small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 12px 0;
+}
+.streaming-text {
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+.streaming-cursor {
+  color: var(--green);
+  animation: stream-blink 1s step-end infinite;
+}
+@keyframes stream-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streaming-cursor {
+    animation: none;
+  }
+  .streaming-answer .spin {
+    animation: none;
+  }
+}

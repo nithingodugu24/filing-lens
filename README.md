@@ -46,6 +46,7 @@ If `.env` already exists, retain your values. The defaults work without copying 
 - A report overview with revenue, total income, profit, prior-year changes, a cited brief, source reader and export. Questions can use one report or explicit broader filters. A bounded people/organisation directory replaces the graph in the main workflow. Dark mode and mobile navigation are supported.
 - A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
 - Local sentence-transformer embeddings, optional Gemini conversations, token-bounded FinBERT commentary tone, spaCy financial entities, PDF quote highlights and saved notes.
+- Live answer streaming in single-question and conversation modes, with a Stop button, source-check progress and recovery from interrupted requests.
 - Optional local JWT accounts and per-owner access, saved question history, live worker notifications, and PDF/Excel/CSV/Markdown exports. Production startup requires authentication, semantic embeddings, a configured AI service, explicit HTTPS origins and a private PostgreSQL password. Public registration never creates an administrator in production.
 - Expanded automated tests, 30-question model comparisons, fixed evaluation artifacts and GitHub Actions configuration. [Upgrade/setup guide](docs/UPGRADE_GUIDE.md).
 

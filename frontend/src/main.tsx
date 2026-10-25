@@ -42,6 +42,12 @@ import { connectStatus } from "./websocket";
 import { MetricCard } from "./metric-card";
 import { ReportHome } from "./report-home";
 import { RecentAnswers } from "./recent-answers";
+import {
+  streamAnswer,
+  StreamingAnswer,
+  initialProgress,
+  updateProgress,
+} from "./answer-stream";
 
 const EvidencePanel = React.lazy(() =>
   import("./evidence-panel").then((module) => ({
@@ -104,6 +110,24 @@ function App() {
     [asked, setAsked] = useState(""),
     [answer, setAnswer] = useState<Answer | null>(null);
   const questionInput = useRef<HTMLTextAreaElement>(null);
+  const requestController = useRef<AbortController | null>(null);
+  const [progress, setProgress] = useState(initialProgress);
+  function stopAnswer(showNotice = true) {
+    if (!requestController.current) return;
+    requestController.current.abort();
+    requestController.current = null;
+    setBusy(false);
+    setProgress(initialProgress);
+    if (showNotice)
+      setNotice("Answer stopped. You can edit your question and try again.");
+  }
+  useEffect(() => () => requestController.current?.abort(), []);
+  useEffect(() => {
+    if (busy && requestController.current)
+      document
+        .querySelector(".streaming-answer")
+        ?.scrollIntoView({ block: "nearest" });
+  }, [busy]);
   const [conversationMode, setConversationMode] = useState(false);
   const refresh = useCallback(async () => {
     try {
@@ -175,9 +199,13 @@ function App() {
     }
   }, [question]);
   useEffect(() => {
+    stopAnswer(false);
     setAnswer(null);
     setAsked("");
   }, [source, company, selectedPeriod, docType, cutoff, activeReport]);
+  useEffect(() => {
+    stopAnswer(false);
+  }, [view, conversationMode]);
   const sourceDocs = docs.filter((d) => d.synthetic === (source === "samples"));
   const companies = [...new Set(sourceDocs.map((d) => d.company))].sort();
   const periods = [...new Set(sourceDocs.map((d) => d.period_end))]
@@ -232,9 +260,13 @@ function App() {
     setAnswer(null);
     setAsked(text);
     setQuestion(text);
+    const controller = new AbortController();
+    requestController.current = controller;
+    setProgress(initialProgress);
     try {
-      setAnswer(
-        await post<Answer>("/questions", {
+      const result = await streamAnswer(
+        "/questions",
+        {
           question: text,
           mode,
           k: 8,
@@ -246,12 +278,22 @@ function App() {
             document_types: docType === "all" ? [] : [docType],
             publication_cutoff: cutoff || null,
           },
-        }),
+        },
+        (event) => {
+          if (!controller.signal.aborted)
+            setProgress((current) => updateProgress(current, event));
+        },
+        controller.signal,
       );
+      if (!controller.signal.aborted) setAnswer(result);
     } catch (e) {
-      setError((e as Error).message);
+      if (!controller.signal.aborted) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (requestController.current === controller) {
+        requestController.current = null;
+        setBusy(false);
+        setProgress(initialProgress);
+      }
     }
   }
   function openDoc(d: Document) {
@@ -864,10 +906,10 @@ function App() {
                           </details>
                         </section>
                         {busy && (
-                          <div className="searching" role="status">
-                            <LoaderCircle className="spin" size={22} />
-                            Reading the selected reports…
-                          </div>
+                          <StreamingAnswer
+                            progress={progress}
+                            onStop={() => stopAnswer()}
+                          />
                         )}
                         {answer && (
                           <section

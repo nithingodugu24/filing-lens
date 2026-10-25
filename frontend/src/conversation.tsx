@@ -1,5 +1,12 @@
-import { useState } from "react";
-import { post, type Answer, type Evidence } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { type Answer, type Evidence } from "./api";
+import {
+  streamAnswer,
+  StreamingAnswer,
+  initialProgress,
+  updateProgress,
+} from "./answer-stream";
+import { MetricCard } from "./metric-card";
 
 export function Confidence({ value }: { value?: number | null }) {
   if (value == null) return null;
@@ -30,24 +37,49 @@ export function Conversation({
     [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const controllerRef = useRef<AbortController | null>(null);
+  const [progress, setProgress] = useState(initialProgress);
+  useEffect(() => () => controllerRef.current?.abort(), []);
+  function stop() {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    setBusy(false);
+    setProgress(initialProgress);
+  }
   async function ask() {
     if (busy || question.trim().length < 3) return;
     setBusy(true);
     setError("");
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setProgress(initialProgress);
     try {
-      const answer = await post<Answer>("/conversations", {
-        session_id: session,
-        question,
-        filters,
-        mode,
-        k: 8,
-      });
+      const answer = await streamAnswer(
+        "/conversations",
+        {
+          session_id: session,
+          question,
+          filters,
+          mode,
+          k: 8,
+        },
+        (event) => {
+          if (!controller.signal.aborted)
+            setProgress((current) => updateProgress(current, event));
+        },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       setTurns((t) => [...t, { question, answer }]);
       setQuestion("");
     } catch (e) {
-      setError((e as Error).message);
+      if (!controller.signal.aborted) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+        setBusy(false);
+        setProgress(initialProgress);
+      }
     }
   }
   return (
@@ -77,6 +109,18 @@ export function Conversation({
             <div className="chat-answer">
               <Confidence value={turn.answer.confidence} />
               {turn.answer.summary && <p>{turn.answer.summary}</p>}
+              <div className="metric-grid">
+                {turn.answer.metric_answers?.map((m) => (
+                  <MetricCard
+                    key={m.fact_id}
+                    metric={m}
+                    evidence={turn.answer.evidence.find(
+                      (e) => e.id === m.citation_id,
+                    )}
+                    onEvidence={onEvidence}
+                  />
+                ))}
+              </div>
               {turn.answer.abstained ? (
                 <p>{turn.answer.limitation}</p>
               ) : (
@@ -119,6 +163,7 @@ export function Conversation({
           </div>
         ))}
       </div>
+      {busy && <StreamingAnswer progress={progress} onStop={stop} />}
       {error && (
         <p className="error" role="alert">
           {error}
