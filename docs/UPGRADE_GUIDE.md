@@ -104,3 +104,21 @@ Semantic faithfulness remains unmeasured without independent claim annotations. 
 - [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output)
 - [React-PDF viewer and text renderer](https://github.com/wojtekmaj/react-pdf)
 - [vis-network interaction API](https://visjs.github.io/vis-network/docs/network/)
+
+## River AI connection
+
+The OpenAI-compatible adapter also works with River, using the existing server-side provider key. Set these non-secret settings alongside that key in your ignored `.env`:
+
+```dotenv
+ANSWER_PROVIDER=openai
+ANSWER_MODEL=deepseek-ai/DeepSeek-V4.1-Flash
+PROVIDER_BASE_URL=https://api.river.ai/v1
+PROVIDER_MAX_OUTPUT_TOKENS=2048
+PROVIDER_REASONING_EFFORT=none
+```
+
+Here `openai` names the compatible HTTP adapter, not the company receiving requests. The app labels this endpoint River AI. These endpoint/JSON/reasoning controls follow [River's inference documentation](https://docs.river.ai/guides/inference/) and [API controls](https://docs.river.ai/guides/inference-controls/). Check model availability for your account rather than assuming every model is accessible.
+
+A key alone does not activate generated answers: `ANSWER_PROVIDER=extractive` continues to show copied passages, and `ANSWER_MODEL` must name an available model. The Ask screen now shows whether AI answers are enabled or report-excerpt mode is active. Readiness reports configuration, not an automatic paid connection test. It never returns credentials.
+
+Generated claims select short quotation IDs from the retrieved text. The server binds each selected ID to its exact source characters and actual citation before running quote validation. This prevents the model from invalidating quotations by rewriting PDF hyphenation or whitespace. A valid source selection still does not prove semantic faithfulness. Response budgets are bounded; conversation history is supplied to compatible services as untrusted context. Provider errors distinguish rejected keys, unavailable models, quota/billing and temporary failures without exposing keys or raw provider error bodies.

@@ -39,11 +39,23 @@ def request_provider(endpoint, payload):
                 if attempt < 2:
                     time.sleep(0.5 * 2**attempt)
                     continue
+            if response.status_code >= 400:
+                reason = {
+                    400: "The model rejected the request settings.",
+                    401: "The AI service rejected the API key.",
+                    402: "The AI account needs credits or billing access.",
+                    403: "The API key does not have access to this model.",
+                    404: "The AI endpoint or selected model was not found.",
+                    429: "The AI service rate limit or quota was reached. Try again later.",
+                }.get(response.status_code, "The AI service is temporarily unavailable.")
+                raise ProviderError(f"Provider request failed ({response.status_code}). {reason}")
             response.raise_for_status()
             return response.json()
         except httpx.TimeoutException:
             if attempt == 2:
                 raise ProviderError("Provider timed out after three attempts.") from None
+        except ProviderError:
+            raise
         except (httpx.HTTPError, ValueError):
             raise ProviderError(
                 "Provider request failed. Check credentials, model and provider status."

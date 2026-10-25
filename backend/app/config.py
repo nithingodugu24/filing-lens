@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     provider_api_key: str = ""
     provider_base_url: str = "https://api.openai.com/v1"
     provider_timeout: float = 30
+    provider_max_output_tokens: int = Field(default=2048, ge=256, le=8192)
+    provider_reasoning_effort: str = ""
     input_cost_per_million: float | None = None
     output_cost_per_million: float | None = None
     max_upload_mb: int = Field(default=100, ge=1, le=100)

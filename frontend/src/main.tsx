@@ -555,6 +555,18 @@ function App() {
                 </section>
               ) : (
                 <>
+                  {view === "ask" && ready.answer_provider && (
+                    <div
+                      className={`ai-service-status ${ready.answer_provider === "extractive" ? "offline" : ""}`}
+                      role="status"
+                    >
+                      {ready.answer_provider === "extractive"
+                        ? "AI answers are off. This mode shows passages from your reports."
+                        : ready.answer_status === "needs_setup"
+                          ? "AI answers need setup. Check the service key and selected model."
+                          : `AI answers enabled · ${ready.answer_service || "Configured AI service"}${ready.answer_model ? " · " + ready.answer_model : ""}`}
+                    </div>
+                  )}
                   {view === "ask" &&
                     filtered.length > 0 &&
                     !searchable.length && (

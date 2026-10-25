@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -257,10 +258,35 @@ def ready(db: Session = Depends(get_db)):
         and (datetime.now(timezone.utc) - state.last_seen.replace(tzinfo=timezone.utc)).total_seconds() < 30
     )
     s = get_settings()
+    host = urlsplit(s.provider_base_url).hostname
+    answer_service = (
+        "Gemini"
+        if s.answer_provider == "gemini"
+        else (
+            "River AI"
+            if host == "api.river.ai"
+            else "OpenAI"
+            if host == "api.openai.com"
+            else "Configured AI service"
+        )
+    )
+    answer_model = s.gemini_model if s.answer_provider == "gemini" else s.answer_model
+    configured = (
+        bool(s.gemini_api_key)
+        if s.answer_provider == "gemini"
+        else bool(s.provider_api_key and s.answer_model)
+    )
     return {
         "database": engine().dialect.name,
         "worker": "online" if worker_ok else "offline",
         "answer_provider": s.answer_provider,
+        "answer_service": answer_service if s.answer_provider != "extractive" else "Report excerpts",
+        "answer_model": answer_model if s.answer_provider != "extractive" else None,
+        "answer_status": "offline"
+        if s.answer_provider == "extractive"
+        else "configured"
+        if configured
+        else "needs_setup",
         "embedding_provider": s.embedding_provider,
         "embedding_model": s.embedding_model,
         "embedding_dimensions": s.embedding_dimensions,

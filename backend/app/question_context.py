@@ -61,6 +61,8 @@ def question_kind(question):
         return "report_overview"
     if text in HELP_QUESTIONS:
         return "help"
+    if re.fullmatch(r"(?:hi+|hey+|hello+)(?: there| filinglens)?|how are you", text):
+        return "help"
     if not content_tokens(question):
         return "clarification"
     return "answer"

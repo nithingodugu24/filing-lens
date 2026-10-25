@@ -1,5 +1,8 @@
 export interface RuntimeInfo {
   answer_provider: string;
+  answer_service?: string;
+  answer_model?: string | null;
+  answer_status?: "offline" | "configured" | "needs_setup";
   max_upload_mb: number;
 }
 export interface Document {

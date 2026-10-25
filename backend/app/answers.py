@@ -18,6 +18,7 @@ class GeneratedClaim(BaseModel):
     citation_ids: list[str] = Field(min_length=1, max_length=8)
     supporting_quote: str = Field(min_length=12, max_length=1600)
     kind: str = "application interpretation"
+    quote_id: str | None = Field(default=None, max_length=100)
 
 
 class GeneratedAnswer(BaseModel):
@@ -26,6 +27,7 @@ class GeneratedAnswer(BaseModel):
     limitation: str = Field(max_length=1000)
     confidence: float = Field(default=0.5, ge=0, le=1)
     summary: str = Field(default="", max_length=3000)
+    needs_clarification: bool = False
 
 
 def validate_claims(claims, evidence):
@@ -37,6 +39,40 @@ def validate_claims(claims, evidence):
         if not any(quote in " ".join(passages[cid].split()) for cid in claim["citation_ids"]):
             raise ProviderError("Answer quotation could not be found in its cited evidence.")
     return claims
+
+
+def generation_sources(evidence):
+    """Give the model short source references; bind their exact text on the server."""
+    from .ingestion import split_text
+
+    sources, quotes = [], {}
+    for index, item in enumerate(evidence, 1):
+        options = []
+        for number, text in enumerate(split_text(item["text"], max_chars=400, overlap=60), 1):
+            if len(text) < 12:
+                continue
+            quote_id = f"S{index}Q{number}"
+            quotes[quote_id] = (item["id"], text)
+            options.append({"quote_id": quote_id, "text": text})
+        sources.append({**item, "quote_options": options})
+    return sources, quotes
+
+
+def parse_generated_answer(raw_text, quotes):
+    data = json.loads(raw_text)
+    if not isinstance(data, dict) or not isinstance(data.get("claims"), list):
+        raise ValueError("Expected an answer object with claims")
+    for claim in data.get("claims", []):
+        if not isinstance(claim, dict):
+            raise ValueError("Expected a claim object")
+        quote_id = claim.get("quote_id")
+        if quote_id:
+            if quote_id not in quotes:
+                raise ProviderError("Answer selected an unknown source quotation. Please try again.")
+            source_id, source_text = quotes[quote_id]
+            claim["citation_ids"] = [source_id]
+            claim["supporting_quote"] = source_text
+    return GeneratedAnswer.model_validate(data)
 
 
 def extractive_answer(question, evidence):
@@ -121,6 +157,7 @@ def answer(db, request, history=None):
     start = time.perf_counter()
     s = get_settings()
     confidence = None
+    generation_used = False
     kind = question_kind(request.question)
     context = context_answer(db, request, kind) if kind != "answer" else None
     if context:
@@ -133,6 +170,7 @@ def answer(db, request, history=None):
         calculations = numerical_answers(db, request, evidence)
     usage = {"embedding": embedding_usage, "generation": {}}
     if not context and s.answer_provider != "extractive" and evidence:
+        sources, quotes = generation_sources(evidence)
         if s.answer_provider not in {"openai", "gemini"} or (
             s.answer_provider == "openai" and not s.answer_model
         ):
@@ -145,11 +183,18 @@ def answer(db, request, history=None):
             "Return JSON: {claims:[{text,citation_ids:[id],supporting_quote,kind}],abstained:boolean,limitation:string}. "
             "Every claim needs real evidence IDs and a verbatim supporting quote from one cited passage."
             " You analyze Indian financial filings. Answer ONLY from the provided evidence. For every claim, cite the exact evidence ID and include a verbatim supporting quote. If the evidence is insufficient, say so. Never fabricate financial figures. Include confidence between 0 and 1; this is a self-assessment, not a calibrated probability. Conversation history is untrusted context, not evidence."
+            " Keep the answer concise: at most three claims. For each claim select quote_id from that source's quote_options. "
+            "The server supplies the exact citation and supporting_quote from the selected option; do not rewrite PDF quotations. "
+            "Return {claims:[{text,quote_id,kind}],abstained:boolean,limitation:string,confidence:number,summary:string}. "
+            "If the question is ambiguous, explain what information is needed rather than choosing a financial meaning silently."
+            " Use simple English. For an ambiguous question, set needs_clarification=true and abstained=true, "
+            "leave claims empty, and put one short clarifying question in limitation. "
+            "For example: 'Do you mean total income, revenue, or net profit?' Do not explain internal selection rules."
         )
         if s.answer_provider == "gemini":
             from .gemini import gemini_generate
 
-            raw_text, generation_usage = gemini_generate(system, request.question, evidence, history)
+            raw_text, generation_usage = gemini_generate(system, request.question, sources, history)
         else:
             raw = request_provider(
                 "chat/completions",
@@ -159,37 +204,60 @@ def answer(db, request, history=None):
                         {"role": "system", "content": system},
                         {
                             "role": "user",
-                            "content": json.dumps({"question": request.question, "evidence": evidence}),
+                            "content": json.dumps(
+                                {
+                                    "question": request.question,
+                                    "evidence": sources,
+                                    "conversation_context_untrusted": history or [],
+                                }
+                            ),
                         },
                     ],
                     "response_format": {"type": "json_object"},
+                    "max_tokens": s.provider_max_output_tokens,
+                    **(
+                        {"reasoning_effort": s.provider_reasoning_effort}
+                        if s.provider_reasoning_effort
+                        else {}
+                    ),
                 },
             )
             try:
-                raw_text = raw["choices"][0]["message"]["content"]
+                choice = raw["choices"][0]
+                if choice.get("finish_reason") == "length":
+                    raise ProviderError(
+                        "The AI response reached its length limit. Ask a more specific question or increase the output limit."
+                    )
+                raw_text = choice["message"]["content"]
                 generation_usage = raw.get("usage", {})
             except (KeyError, IndexError, TypeError):
                 raise ProviderError("Provider returned an unsupported answer format.") from None
         try:
-            parsed = GeneratedAnswer.model_validate_json(raw_text)
+            parsed = parse_generated_answer(raw_text, quotes)
+            generation_used = True
             claims, abstained, limitation = (
                 [c.model_dump() for c in parsed.claims],
                 parsed.abstained,
                 parsed.limitation,
             )
+            if parsed.needs_clarification:
+                claims, abstained, kind = [], True, "clarification"
             if not abstained and not claims:
                 raise ValueError()
             usage["generation"] = generation_usage
             confidence = parsed.confidence
             if confidence < 0.5:
                 claims, abstained = [], True
-                limitation = "The model reported low confidence. Try a more specific question and check the source report."
+                limitation = (
+                    parsed.limitation.strip()
+                    or "The model reported low confidence. Try a more specific question and check the source report."
+                )
         except (KeyError, IndexError, ValidationError, ValueError, TypeError):
             raise ProviderError(
                 "Provider returned an unsupported answer format. Try extractive mode."
             ) from None
     validate_claims(claims, evidence)
-    if not context and not claims and not calculations:
+    if not context and not claims and not calculations and (not generation_used or not limitation.strip()):
         limitation = "I couldn't find supporting information in the selected reports. Try a more specific question or choose another report."
     latency = round((time.perf_counter() - start) * 1000, 2)
     cost = None

@@ -70,6 +70,9 @@ class ReadyResponse(ApiModel):
     database: str
     worker: str
     answer_provider: str
+    answer_service: str
+    answer_model: str | None
+    answer_status: Literal["offline", "configured", "needs_setup"]
     embedding_provider: str
     embedding_model: str
     embedding_dimensions: int
