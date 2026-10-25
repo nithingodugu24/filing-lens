@@ -1,0 +1,12 @@
+# Five-minute walkthrough
+
+1. Start Docker Desktop, run `docker compose up -d --build` from the repository, and open [FilingLens](http://localhost:5173). On an empty library choose **Load synthetic demo**. Wait until all four documents say **Indexed**. No model downloads or provider credentials are needed after the container images are built.
+2. Read the synthetic-data notice. These are invented TCS and Infosys figures, not actual disclosures. Select **TCS** and **All periods**, then choose **Follow the margin story**. Inspect the source excerpts, the 24% and 25% input values, and the +1 percentage-point calculation.
+3. Click a citation. Check its PDF page number, separate printed-label field, full extracted page text and table. Switch to **PDF preview** and use **Open PDF** to inspect the underlying file. Close the reader.
+4. Select **All companies** and choose **Put growth in context**. The invented revenue values produce **TCS +2.5%** and **Infosys +4%**. Change retrieval mode to **Hybrid**, submit again, and inspect the recorded configuration.
+5. Open **Compare metrics**, select TCS and operating margin, choose **Basis-point change** and calculate **+100 bps**. Inspect both periods and normalised inputs. Selecting cross-company facts from different dates is rejected.
+6. Ask **What is the share price?** The corpus cannot answer; the UI shows **More evidence needed**. The evaluation also includes harder unsupported questions: forecast and cloud-segment requests expose the extractive baseline's limitations.
+7. Open **Document library**. Upload a digital PDF with company, type, actual period and basis. Watch queued → processing → indexed. A blank/scanned PDF becomes failed with a useful message and a Retry action. Strictly recognised financial candidates appear under **Values awaiting source review**; they cannot enter comparisons until inspected and marked checked.
+8. Open **Method & evaluation** for recorded synthetic results, including 50% unsupported-question abstention. Read [the report](../evaluation/REPORT.md) for failures and how each metric was computed. Do not describe matching quotations as human-validated answers.
+
+For real documents, follow [the official manifest](../sources/official-manifest.json). Automated download checks returned HTTP 403 for the attempted official PDFs in this environment. Download through the issuer's normal website and upload manually. Real-disclosure extraction/answer quality has not been validated here.

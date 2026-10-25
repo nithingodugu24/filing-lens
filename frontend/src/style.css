@@ -1379,6 +1379,10 @@ pre {
   color: #9dac8e;
   margin-top: 10px;
 }
+
+.evaluation-results {
+  margin-top: 26px;
+}
 footer {
   display: flex;
   align-items: center;

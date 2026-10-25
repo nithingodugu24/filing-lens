@@ -1,0 +1,16 @@
+[
+  {
+    "url": "https://www.infosys.com/investors/reports-filings/quarterly-results/2025-2026/q1/documents/q1-fy26-financial-results-auditorsreports.pdf",
+    "scope": "Extraction only; no financial values verified. Real PDFs stay outside Git.",
+    "status": "download_blocked",
+    "http_status": 403,
+    "next_step": "Download manually from the official investor-relations page; no access controls were bypassed."
+  },
+  {
+    "url": "https://www.tcs.com/content/dam/tcs/investor-relations/financial-statements/2025-26/q2/Presentations/Q2%202025-26%20Fact%20Sheet.pdf",
+    "scope": "Extraction only; no financial values verified. Real PDFs stay outside Git.",
+    "status": "download_blocked",
+    "http_status": 403,
+    "next_step": "Download manually from the official investor-relations page; no access controls were bypassed."
+  }
+]

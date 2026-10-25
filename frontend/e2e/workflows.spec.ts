@@ -2,6 +2,10 @@ import { test, expect } from "@playwright/test";
 test("question, evidence reader and PDF page", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("4 indexed & searchable")).toBeVisible();
+  await page.screenshot({
+    path: "../docs/screenshots/research-desk.png",
+    fullPage: true,
+  });
   await page.getByRole("button", { name: /Put growth in context/ }).click();
   await expect(
     page.getByRole("heading", { name: "From the disclosures" }),
@@ -89,4 +93,14 @@ test("library preview, upload validation and responsive layout", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBeTruthy();
+  await page
+    .getByRole("button", { name: "Research desk", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your research, grounded." }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../docs/screenshots/research-mobile.png",
+    fullPage: true,
+  });
 });

@@ -25,6 +25,8 @@ services:
       ANSWER_MODEL: ${ANSWER_MODEL:-}
       PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
       PROVIDER_BASE_URL: ${PROVIDER_BASE_URL:-https://api.openai.com/v1}
+      INPUT_COST_PER_MILLION: ${INPUT_COST_PER_MILLION:-}
+      OUTPUT_COST_PER_MILLION: ${OUTPUT_COST_PER_MILLION:-}
     ports: ["127.0.0.1:8000:8000"]
     volumes: ["documents:/app/data"]
     depends_on:

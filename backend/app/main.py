@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from .config import get_settings
 from .db import engine, get_db, init_db
@@ -112,6 +113,20 @@ async def invalid_value(request, error):
 async def provider_error(request, error):
     return JSONResponse(
         {"detail": str(error), "request_id": getattr(request.state, "request_id", None)}, status_code=503
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_unavailable(request, error):
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(
+        json.dumps(
+            {"event": "database_unavailable", "request_id": request_id, "error_type": type(error).__name__}
+        )
+    )
+    return JSONResponse(
+        {"detail": "Database is temporarily unavailable. Please try again.", "request_id": request_id},
+        status_code=503,
     )
 
 

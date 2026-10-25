@@ -1,0 +1,13 @@
+# Dataset provenance and limitations
+
+The shipped corpus consists of four **synthetic, invented** two-page PDFs created by `backend/app/demo.py`: TCS and Infosys, Q1 and Q2 FY26. The company names identify demo entities, not actual issuer disclosures. Revenue figures, margins, explanations and draft conflicts were written for testing. Each PDF and the interface prominently labels this. No investment conclusions may be drawn from them.
+
+Page 1 contains a small grid with revenue and operating margin. Page 2 contains invented commentary. The Infosys Q2 fixture deliberately includes contradictory draft demand commentary. The corpus contains no share price, executive names, real forecast or separately disclosed cloud revenue.
+
+The optional [official source manifest](../sources/official-manifest.json) records issuer-controlled URLs for two companies and two quarters, plus annual-report and transcript examples. Landing pages are distinguished from direct PDF links. Dates and units are left null when not established for the selected file. Manifest links were checked on 25 October 2026. They are retrieval starting points, not a claim that all content has been reviewed. No real issuer PDFs are redistributed in Git.
+
+For a real corpus, download a PDF from the issuer's investor-relations site, retain its exact URL, check dates, currency, units and reporting basis, then upload it. The system records the byte hash. Review each candidate value against its actual table, column heading, footnote and source page before marking it checked. Multi-period tables and adjusted figures require judgement. Sources without a known publication date are excluded from publication-cutoff queries.
+
+Question labels and expected evidence in `evaluation/questions.json` were authored and inspected by the implementation agent against the fixture specification. They have **not received independent human review**. Six questions form the development set; ten form the initial held-out set. The latter was not used to tune retrieval before the recorded first evaluation. Reading its failures makes later tuning exploratory; keep the recorded baseline and use new independently reviewed questions for future claims of generalisation.
+
+The evaluation report records the question-file hash, exact PDF hashes, backend and provider configuration. Tiny synthetic data does not establish performance on real disclosures, scanned PDFs, complex tables or adversarial documents. Keyword overlap can produce a valid quotation that does not answer the question. Quote support is an automated string check, not a human judgement of answer support.
