@@ -53,6 +53,10 @@ def request_provider(endpoint, payload):
 
 def embed(texts: list[str]):
     s = get_settings()
+    if s.embedding_provider == "sentence-transformer":
+        from .semantic import semantic_embed
+
+        return semantic_embed(texts), {}
     if s.embedding_provider == "local":
         vectors = []
         for text in texts:
@@ -64,7 +68,7 @@ def embed(texts: list[str]):
             vectors.append([x / norm for x in vector])
         return vectors, {}
     if s.embedding_provider != "openai":
-        raise ProviderError("Unknown embedding provider. Choose local or openai.")
+        raise ProviderError("Unknown embedding provider. Choose local, sentence-transformer or openai.")
     result = request_provider(
         "embeddings", {"model": s.embedding_model, "input": texts, "dimensions": s.embedding_dimensions}
     )
