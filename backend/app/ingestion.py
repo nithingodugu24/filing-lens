@@ -52,7 +52,15 @@ def enqueue(db, content: bytes, metadata: DocumentMetadata, synthetic=False):
     return document, False
 
 
-def extract_pdf(path):
+def normalise_pdf_text(text):
+    # Sorted PDF text can contain thousands of spaces used only to align columns.
+    # Preserve words, numbers and line boundaries; tables retain their separate cell grid.
+    return "\n".join(
+        re.sub(r"[^\S\n]+", " ", line).strip() for line in text.replace("\x00", "").splitlines()
+    ).strip()
+
+
+def extract_pdf(path, progress=None):
     try:
         pdf = pymupdf.open(path)
     except Exception:
@@ -62,14 +70,30 @@ def extract_pdf(path):
     with pdf:
         if pdf.needs_pass:
             raise ExtractionError("Password-protected PDFs are unsupported. Upload an unlocked copy.")
-        if not 1 <= len(pdf) <= 500:
-            raise ExtractionError("PDF must contain between 1 and 500 pages.")
+        settings = get_settings()
+        if not 1 <= len(pdf) <= settings.max_pdf_pages:
+            raise ExtractionError(
+                f"This PDF has {len(pdf):,} pages. The current limit is {settings.max_pdf_pages:,} pages."
+            )
         pages, tables, warnings = [], [], []
+        total_chars = 0
+        if progress:
+            progress(0, len(pdf), "reading")
         for index, page in enumerate(pdf):
-            text = page.get_text(sort=True).strip().replace("\x00", "")
-            if len(text) > 100000 or sum(len(p[2]) for p in pages) + len(text) > 2000000:
+            raw_text = page.get_text(sort=True)
+            if len(raw_text) > 2000000:
                 raise ExtractionError(
-                    "PDF text exceeds processing limits (100k characters/page, 2M/document). Split the document."
+                    f"PDF page {index + 1} produced unusually large raw text (over 2,000,000 characters). Export a cleaner PDF or split this page."
+                )
+            text = normalise_pdf_text(raw_text)
+            total_chars += len(text)
+            if len(text) > settings.max_page_text_chars:
+                raise ExtractionError(
+                    f"PDF page {index + 1} has {len(text):,} text characters after removing extra spacing. The per-page limit is {settings.max_page_text_chars:,}. Split this page or adjust MAX_PAGE_TEXT_CHARS."
+                )
+            if total_chars > settings.max_document_text_chars:
+                raise ExtractionError(
+                    f"This report has more than {settings.max_document_text_chars:,} text characters after removing extra spacing. Split the report or adjust MAX_DOCUMENT_TEXT_CHARS."
                 )
             pages.append((index, page.get_label() or None, text))
             try:
@@ -79,6 +103,8 @@ def extract_pdf(path):
                         tables.append((index, number, cells))
             except Exception:
                 warnings.append(f"Table extraction unavailable on PDF page {index + 1}.")
+            if progress and ((index + 1) % 10 == 0 or index + 1 == len(pdf)):
+                progress(index + 1, len(pdf), "reading")
         good_pages = sum(len(re.findall(r"\w", p[2])) >= 40 for p in pages)
         if good_pages == 0:
             raise ExtractionError(
@@ -109,8 +135,13 @@ def split_text(text, max_chars=1500, overlap=180):
         start = max(start + 1, end - overlap)
 
 
-def process_document(db, document):
-    pages, tables, warnings = extract_pdf(document.path)
+def process_document(db, document, progress=None):
+    pages, tables, warnings = extract_pdf(document.path, progress=progress)
+    if progress:
+        progress(len(pages), len(pages), "indexing")
+        # Progress is committed separately while extraction is running. Refresh before
+        # assigning final fields so a transient progress message is always cleared.
+        db.refresh(document)
     # All writes and status changes are atomic. Retrying never leaves partial evidence.
     for model in [Fact, Chunk, ExtractedTable, Page]:
         db.execute(delete(model).where(model.document_id == document.id))
@@ -139,9 +170,16 @@ def process_document(db, document):
         table_id = f"{document.id}:p{index}:t{number}"
         db.add(ExtractedTable(id=table_id, document_id=document.id, page_index=index, cells=cells))
         rendered = "\n".join(" | ".join(str(v or "") for v in row) for row in cells)
-        chunks.append(
-            Chunk(id=table_id, document_id=document.id, page_index=index, kind="table", text=rendered)
-        )
+        for part, passage in enumerate(split_text(rendered)):
+            chunks.append(
+                Chunk(
+                    id=table_id if part == 0 else f"{table_id}:c{part}",
+                    document_id=document.id,
+                    page_index=index,
+                    kind="table",
+                    text=passage,
+                )
+            )
     # Small batches respect provider limits and bound request memory.
     for start in range(0, len(chunks), 32):
         batch = chunks[start : start + 32]
@@ -152,20 +190,32 @@ def process_document(db, document):
             db.add(chunk)
     db.flush()
     # Conservative candidates: explicit metric/value/currency/unit rows only. Never auto-verify uploads.
-    for chunk in chunks:
-        if chunk.kind != "table":
-            continue
+    # Parse candidates once from the full table, not overlapping retrieval chunks.
+    for index, number, cells in tables:
+        table_id = f"{document.id}:p{index}:t{number}"
+        rendered = "\n".join(" | ".join(str(v or "") for v in row) for row in cells)
         for match in re.finditer(
             r"(?im)^(Revenue|Operating margin)\s*\|\s*([\d,]+(?:\.\d+)?)"
             r"\s*\|\s*(INR|USD|EUR|GBP|PCT)\s*\|\s*"
             r"(crore|lakh|million|billion|unit|percent)\s*$",
-            chunk.text,
+            rendered,
         ):
             metric, value, currency, units = match.groups()
+            source_chunk = next(
+                (
+                    c
+                    for c in chunks
+                    if (c.id == table_id or c.id.startswith(table_id + ":c"))
+                    and match.group(0).strip() in c.text
+                ),
+                None,
+            )
+            if source_chunk is None:
+                continue
             db.add(
                 Fact(
                     document_id=document.id,
-                    chunk_id=chunk.id,
+                    chunk_id=source_chunk.id,
                     metric="revenue" if metric.lower() == "revenue" else "operating_margin",
                     value=value.replace(",", ""),
                     currency=currency,
@@ -180,6 +230,24 @@ def process_document(db, document):
     document.page_count = len(pages)
     document.warning = " ".join(warnings) or None
     document.status = "indexed"
+
+
+def record_progress(job_id, document_id, completed, total, stage):
+    with session_scope() as db:
+        job = db.get(Job, job_id)
+        if job is None or job.status != "processing":
+            return
+        job.lease_until = now() + timedelta(minutes=15)
+        document = db.get(Document, document_id)
+        document.page_count = total
+        document.warning = (
+            f"Reading pages: {completed} of {total}."
+            if stage == "reading"
+            else f"All {total} pages read. Preparing them for search…"
+        )
+        state = db.get(WorkerState, "main")
+        if state:
+            state.last_seen = now()
 
 
 def run_one():
@@ -217,7 +285,13 @@ def run_one():
         db.get(Document, document_id).status = "processing"
     try:
         with session_scope() as db:
-            process_document(db, db.get(Document, document_id))
+            process_document(
+                db,
+                db.get(Document, document_id),
+                progress=lambda completed, total, stage: record_progress(
+                    job_id, document_id, completed, total, stage
+                ),
+            )
             job = db.get(Job, job_id)
             job.status, job.error, job.lease_until = "complete", None, None
     except Exception as error:

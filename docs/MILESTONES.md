@@ -23,3 +23,5 @@ Known boundaries: official PDF downloads returned HTTP 403, real-filings quality
 Follow-up commit: `Allow bigger annual report uploads` — default 100 MiB, consistent UI/API/proxy limits, immediate size feedback, and two additional backend and browser checks. Current verification totals: 34 backend tests and six browser checks.
 
 Interface follow-up: `Make app simple and easy to use` — three clear tabs, larger type, shorter uploads with period presets, separate uploaded/sample reports, source buttons, useful empty/failure states and accessible dialogs. Browser coverage expanded to ten checks.
+
+Processing follow-up: `Fix annual report processing and answers` — normalise PDF column spacing, configurable text budgets, visible progress, bounded table chunks and contiguous source quotations. The previously failed 360-page report is indexed, with its annual reporting label corrected from the cover. Verification: 41 backend tests on SQLite/PostgreSQL, eleven browser checks and actual source-page/question checks on the uploaded report.

@@ -14,9 +14,13 @@ flowchart LR
   A --> C[Decimal financial calculations]
 ```
 
-The API persists uploads and queues work. One worker polls jobs with `FOR UPDATE SKIP LOCKED`, a 15-minute lease and a three-attempt budget. Provider failures are retried with backoff; extraction failures require an explicit retry. A crashed worker's expired lease can be reclaimed. API startup completes schema creation before Compose starts the worker. This is a small single-worker deployment; long jobs exceeding the lease need a lease-renewal design before scaling workers.
+The API persists uploads and queues work before returning HTTP 202. One worker polls jobs with `FOR UPDATE SKIP LOCKED`, a 15-minute lease and a three-attempt budget. Extraction checkpoints commit page counts/progress, refresh the worker heartbeat and extend the lease. Provider failures are retried with backoff; extraction failures require an explicit retry. A crashed worker's expired lease can be reclaimed. API startup completes schema creation before Compose starts the worker. This is a small single-worker deployment; long indexing stages and multiple workers still need stronger lease ownership/renewal controls.
 
 Each PDF has a SHA-256 unique key. Storage uses that digest rather than a user filename. Document metadata lives separately from page text, chunks, table cells, reviewed financial facts, processing jobs and query-run diagnostics. Jobs commit document indexing atomically, so a failure cannot leave searchable partial evidence. Reindexing resets extracted facts and their reviews.
+
+Sorted PDF extraction can add large amounts of horizontal whitespace to represent columns. The processor normalises this spacing while preserving line breaks, words and numbers, then applies configurable page/document text budgets. Defaults are 500 pages, 250,000 normalised characters per page and 10,000,000 per document, with a separate two-million-character raw-page guard. It never truncates over-budget text and marks it successful. Table cells remain stored separately; table retrieval chunks are bounded to 1,500 characters and candidate facts are parsed once from the full table to avoid overlap duplicates.
+
+Extractive quotations use contiguous sentence windows. Removing intervening sentences would create a quotation absent from the source and correctly fail citation validation. The same ID and literal-quotation checks apply to extractive and generated claims.
 
 PDF page indexes are zero-based internally. The interface displays `page_index + 1` and links with `#page=N`. A printed page label is stored separately when the PDF exposes it; we never infer a printed label from a number in extracted prose.
 

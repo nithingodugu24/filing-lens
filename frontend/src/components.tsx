@@ -70,7 +70,15 @@ export function DocumentTable({
                   </span>
                 </button>
                 {d.warning && (
-                  <div className="document-warning">{d.warning}</div>
+                  <div
+                    className={
+                      d.status === "processing"
+                        ? "document-progress"
+                        : "document-warning"
+                    }
+                  >
+                    {d.warning}
+                  </div>
                 )}
               </td>
               <td>

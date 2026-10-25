@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     input_cost_per_million: float | None = None
     output_cost_per_million: float | None = None
     max_upload_mb: int = Field(default=100, ge=1, le=100)
+    max_pdf_pages: int = Field(default=500, ge=1, le=1000)
+    max_page_text_chars: int = Field(default=250000, ge=1000, le=2000000)
+    max_document_text_chars: int = Field(default=10000000, ge=1000, le=50000000)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 

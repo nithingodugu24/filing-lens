@@ -45,8 +45,12 @@ def extractive_answer(question, evidence):
             excerpt = passage["text"]
         else:
             sentences = re.split(r"(?<=[.!?])\s+", passage["text"])
-            relevant = [s for s in sentences if terms & set(content_tokens(s))]
-            excerpt = " ".join(relevant[:3])
+            relevant = [i for i, sentence in enumerate(sentences) if terms & set(content_tokens(sentence))]
+            # Keep a contiguous source window. Joining separated matching sentences
+            # creates a quotation that does not actually occur in the cited passage.
+            excerpt = (
+                " ".join(sentences[relevant[0] : relevant[min(2, len(relevant) - 1)] + 1]) if relevant else ""
+            )
         if excerpt and terms & set(content_tokens(excerpt)):
             claims.append(
                 {

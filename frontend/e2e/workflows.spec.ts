@@ -1,5 +1,40 @@
 import { test, expect } from "@playwright/test";
 
+test("processing progress is readable while a long report is prepared", async ({
+  page,
+}) => {
+  await page.route("**/api/documents", (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: "processing-doc",
+          company: "Example Ltd",
+          title: "Annual report",
+          synthetic: false,
+          status: "processing",
+          warning: "Reading pages: 120 of 360.",
+          document_type: "annual_report",
+          period_start: "2025-04-01",
+          period_end: "2026-03-31",
+          page_count: 360,
+          job: null,
+        },
+      ],
+    }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Your reports are being prepared" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "View report status", exact: true })
+    .click();
+  await expect(page.locator(".document-progress")).toHaveText(
+    "Reading pages: 120 of 360.",
+  );
+  await expect(page.locator(".document-warning")).not.toBeVisible();
+});
+
 test("first-time screen explains the steps and offers sample reports", async ({
   page,
 }) => {
@@ -219,7 +254,12 @@ test("sample data and uploaded reports are kept separate in questions", async ({
     const response = await route.fetch();
     await route.fulfill({
       response,
-      json: [...(await response.json()), fixtureDoc],
+      json: [
+        ...(await response.json()).filter(
+          (d: { synthetic: boolean }) => d.synthetic,
+        ),
+        fixtureDoc,
+      ],
     });
   });
   const filters: boolean[] = [];

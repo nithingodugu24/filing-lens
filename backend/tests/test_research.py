@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from app.answers import validate_claims
+from app.answers import extractive_answer, validate_claims
 from app.finance import calculate, period_label
 from app.providers import ProviderError, embed, request_provider
 from app.retrieval import retrieve
@@ -28,6 +28,14 @@ def fact(**changes):
             | changes
         )
     )
+
+
+def test_excerpts_do_not_stitch_non_adjacent_sentences():
+    text = "Operating margin improved. The reporting context is explained here. Operating margin remains a priority."
+    evidence = [{"id": "real-passage", "text": text, "kind": "passage"}]
+    claims, abstained, _ = extractive_answer("operating margin", evidence)
+    assert not abstained and claims[0]["supporting_quote"] == text
+    validate_claims(claims, evidence)
 
 
 @pytest.mark.parametrize("mode", ["keyword", "vector", "hybrid"])

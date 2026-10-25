@@ -29,13 +29,14 @@ If `.env` already exists, retain your values. The defaults work without copying 
 
 - Upload digital PDFs up to 100 MB / 500 pages, with explicit company, type, reporting dates, publication date, currency, units, basis and optional official URL. The interface reads the configured limit from the API and shows selected file size.
 - SHA-256 duplicate detection, retryable background jobs, page-bounded text extraction and grid-table extraction. Scanned, empty, encrypted, damaged and poorly extracted PDFs fail clearly.
+- Annual-report processing removes artificial column-spacing before counting text limits, shows page progress, and keeps table chunks small enough for retrieval. Default budgets: 250,000 characters per page and 10,000,000 per report; configure `MAX_PAGE_TEXT_CHARS`, `MAX_DOCUMENT_TEXT_CHARS` and `MAX_PDF_PAGES` if needed.
 - Company/type/period/publication-cutoff filtering **before** keyword, cosine-vector or reciprocal-rank-fusion retrieval. Unknown publication dates are excluded by cutoff queries.
 - Extractive answers with clickable evidence, original PDF preview at the cited page, separate printed page labels and run diagnostics.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
 - Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
 - Three straightforward tabs: **Ask a question**, **My reports**, and **Compare numbers**. Larger text, clear status messages, source buttons, mobile navigation and keyboard-accessible dialogs.
 - A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
-- 34 backend tests, ten browser checks, fixed evaluation labels/results and GitHub Actions configuration.
+- 41 backend tests, eleven browser checks, fixed evaluation labels/results and GitHub Actions configuration.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 
@@ -142,9 +143,9 @@ Changing embedding provider/model/dimensions requires reindexing through `POST /
 - Unsupported questions with overlapping vocabulary can return related historical excerpts. This is a documented answerability failure, even when citation and quote checks pass. Always inspect sources.
 - Local hash embeddings are a lexical baseline, not a trained semantic model. No OCR, multilingual quality guarantee or arbitrary-table fact extraction is included.
 - Real uploads are not automatically trusted. Recognised candidates require review, and many real tables produce no metric candidates at all. Adjusted figures and mixed revisions need manual reconciliation; currency FX conversion is not implemented.
-- Synthetic data is the only validated corpus. Automated retrieval attempts for the two official PDFs returned HTTP 403; see [record](docs/real-extraction-check.json). Official URLs and manual retrieval instructions are in the [manifest](sources/official-manifest.json).
+- The benchmark corpus is synthetic. One user-uploaded 360-page annual report was also successfully indexed and checked for source-linked extractive answers; this is a workflow check, not a real-filings accuracy benchmark. Automated downloads of the manifest PDFs returned HTTP 403; see [record](docs/real-extraction-check.json). Official URLs and manual retrieval instructions are in the [manifest](sources/official-manifest.json).
 - This localhost demo has no login, tenant isolation, role-based fact approval, public rate limiter or production migration system. It is not ready for public financial-data use. The PDFs are untrusted data; stronger worker resource/process isolation is needed for hostile uploads at scale.
-- The queue uses a 15-minute lease without renewal. Run one worker for this demo; large jobs or multiple workers need lease extension and stronger ownership control.
+- The queue uses a 15-minute lease, refreshed at extraction-progress checkpoints. Run one worker for this demo; indexing stages exceeding the lease and multiple workers still need stronger ownership/renewal controls.
 - Future work: independently reviewed real corpus, stronger answerability, semantic embedding benchmarks, OCR, robust table schemas, production authentication/migrations and operational load tests. These are not completed capabilities.
 
 Built in six Git milestones with simple English commit messages. [Stages](docs/MILESTONES.md) · [Resume bullets based on observed work](docs/RESUME_BULLETS.md).

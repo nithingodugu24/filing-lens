@@ -164,6 +164,7 @@ def ready(db: Session = Depends(get_db)):
         "embedding_model": s.embedding_model,
         "embedding_dimensions": s.embedding_dimensions,
         "max_upload_mb": s.max_upload_mb,
+        "max_pdf_pages": s.max_pdf_pages,
         "mode": "extractive offline demo" if s.answer_provider == "extractive" else "generative provider",
     }
 
@@ -202,6 +203,7 @@ async def upload_document(
         raise HTTPException(415, "Select a PDF file.")
     content = await file.read(get_settings().max_upload_mb * 1024 * 1024 + 1)
     document, duplicate = enqueue(db, content, parsed)
+    db.commit()
     return {"document": document_json(db, document), "duplicate": duplicate}
 
 
@@ -252,6 +254,7 @@ def retry_document(document_id: str, db: Session = Depends(get_db)):
         raise HTTPException(409, "Only failed documents can be retried.")
     document.status, document.warning = "queued", None
     db.add(Job(document_id=document_id))
+    db.commit()
     return {"status": "queued"}
 
 
@@ -262,6 +265,7 @@ def reindex_document(document_id: str, db: Session = Depends(get_db)):
         raise HTTPException(409, "Wait for the current processing job to finish.")
     document.status, document.warning = "queued", "Reindexing resets extracted facts and their reviews."
     db.add(Job(document_id=document_id))
+    db.commit()
     return {"status": "queued", "message": document.warning}
 
 

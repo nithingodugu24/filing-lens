@@ -773,6 +773,13 @@ pre {
   max-width: 550px;
   margin-top: 10px;
 }
+.document-progress {
+  font-size: 13px;
+  color: #456b84;
+  line-height: 1.6;
+  max-width: 550px;
+  margin-top: 10px;
+}
 .table-empty {
   text-align: center;
   padding: 28px;

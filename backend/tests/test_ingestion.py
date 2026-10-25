@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import select
 
 from app.demo import FIXTURES, make_pdf
-from app.ingestion import ExtractionError, enqueue, extract_pdf, run_one
+from app.ingestion import ExtractionError, enqueue, extract_pdf, normalise_pdf_text, run_one
 from app.models import Chunk, Document, ExtractedTable, Fact, Job, Page
 from app.schemas import DocumentMetadata
 
@@ -152,3 +152,107 @@ def test_configured_upload_limit_returns_413(client):
     )
     assert response.status_code == 413 and "1 MB" in response.json()["detail"]
     assert client.post("/api/documents", content=b"x" * (2 * 1024 * 1024 + 1)).status_code == 413
+
+
+def test_normalisation_keeps_financial_values_and_line_boundaries():
+    assert normalise_pdf_text("  Revenue\t    1,23,456 crore\n\n  Operating margin     25.2% \x00\n") == (
+        "Revenue 1,23,456 crore\n\nOperating margin 25.2%"
+    )
+
+
+def fake_pdf(monkeypatch, texts):
+    from types import SimpleNamespace
+
+    class Pdf:
+        needs_pass = False
+
+        def __len__(self):
+            return len(texts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def __iter__(self):
+            for value in texts:
+                yield SimpleNamespace(
+                    get_text=lambda **kwargs: value,
+                    get_label=lambda: "",
+                    find_tables=lambda: SimpleNamespace(tables=[]),
+                )
+
+    monkeypatch.setattr("app.ingestion.pymupdf.open", lambda _: Pdf())
+
+
+def test_column_padding_does_not_exhaust_document_budget(monkeypatch):
+    value = (
+        "Annual report revenue 100 crore with consolidated figures and management commentary." + " " * 1100000
+    )
+    fake_pdf(monkeypatch, [value, value])
+    pages, _, _ = extract_pdf("unused.pdf")
+    assert sum(len(p[2]) for p in pages) < 200
+    assert len(pages) == 2 and "100 crore" in pages[1][2]
+
+
+@pytest.mark.parametrize("kind", ["page", "document"])
+def test_normalised_text_budgets_still_fail_with_actionable_message(monkeypatch, kind):
+    from app.config import get_settings
+
+    value = "Annual report revenue and operating margin commentary. " * 30
+    fake_pdf(monkeypatch, [value, value])
+    if kind == "page":
+        get_settings().max_page_text_chars = 1000
+        message = r"PDF page 1.*MAX_PAGE_TEXT_CHARS"
+    else:
+        get_settings().max_document_text_chars = 2000
+        message = r"2,000.*MAX_DOCUMENT_TEXT_CHARS"
+    with pytest.raises(ExtractionError, match=message):
+        extract_pdf("unused.pdf")
+
+
+def test_large_tables_have_bounded_chunks_and_no_duplicate_facts(db, monkeypatch):
+    document, _ = enqueue(db, make_pdf(FIXTURES[0]), metadata())
+    db.commit()
+    cells = [["Metric", "Value", "Currency", "Units"], ["Revenue", "100", "INR", "crore"]]
+    cells += [[f"Note {i}", "Long table cells for retrieval and inspection " * 3, "", ""] for i in range(50)]
+    monkeypatch.setattr(
+        "app.ingestion.extract_pdf",
+        lambda path, progress=None: (
+            [(0, None, "Annual financial report with consolidated revenue and management commentary.")],
+            [(0, 0, cells)],
+            [],
+        ),
+    )
+    run_one()
+    db.expire_all()
+    chunks = db.scalars(select(Chunk).where(Chunk.document_id == document.id, Chunk.kind == "table")).all()
+    assert len(chunks) > 1 and all(len(c.text) <= 1500 for c in chunks)
+    facts = db.scalars(select(Fact).where(Fact.document_id == document.id)).all()
+    assert len(facts) == 1 and facts[0].value == "100"
+    assert "Revenue | 100 | INR | crore" in db.get(Chunk, facts[0].chunk_id).text
+
+
+def test_progress_is_visible_and_cleared_after_success(db, monkeypatch):
+    from app.db import session_scope
+    from app.ingestion import record_progress
+
+    document, _ = enqueue(db, make_pdf(FIXTURES[0]), metadata())
+    db.commit()
+    events = []
+
+    def observe(job_id, document_id, completed, total, stage):
+        record_progress(job_id, document_id, completed, total, stage)
+        with session_scope() as progress_db:
+            current = progress_db.get(Document, document_id)
+            assert current.page_count == total and current.status == "processing"
+            assert progress_db.get(Job, job_id).lease_until is not None
+            events.append((completed, total, stage, current.warning))
+
+    monkeypatch.setattr("app.ingestion.record_progress", observe)
+    run_one()
+    db.expire_all()
+    assert events[0][:3] == (0, 2, "reading") and events[-1][:3] == (2, 2, "indexing")
+    assert db.get(Document, document.id).status == "indexed"
+    assert db.get(Document, document.id).warning is None
