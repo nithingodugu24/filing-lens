@@ -8,7 +8,8 @@ from sqlalchemy import select
 from .config import get_settings
 from .finance import calculate
 from .models import Fact, QueryRun
-from .providers import ProviderError, fingerprint, request_provider
+from .providers import ProviderError, fingerprint, request_provider, stream_provider
+from .answer_progress import AnswerProgress, check_cancelled
 from .retrieval import content_tokens, filtered_statement, retrieve
 from .question_context import context_answer, question_kind, SUGGESTIONS
 
@@ -153,8 +154,11 @@ def numerical_answers(db, request, evidence):
     return calculations
 
 
-def answer(db, request, history=None, retrieval_request=None):
+def answer(db, request, history=None, retrieval_request=None, on_event=None, cancelled=None):
     start = time.perf_counter()
+    check_cancelled(cancelled)
+    if on_event:
+        on_event("status", {"message": "Finding source passages…"})
     s = get_settings()
     confidence = None
     generation_used = False
@@ -178,7 +182,11 @@ def answer(db, request, history=None, retrieval_request=None):
         claims, abstained, limitation = extractive_answer(request.question, evidence)
         calculations = numerical_answers(db, request, evidence)
     usage = {"embedding": embedding_usage, "generation": {}}
+    check_cancelled(cancelled)
     if not context and not financial and s.answer_provider != "extractive" and evidence:
+        progress = AnswerProgress(on_event, cancelled) if on_event else None
+        if on_event:
+            on_event("status", {"message": "Writing your answer…"})
         sources, quotes = generation_sources(evidence)
         if s.answer_provider not in {"openai", "gemini"} or (
             s.answer_provider == "openai" and not s.answer_model
@@ -203,9 +211,22 @@ def answer(db, request, history=None, retrieval_request=None):
         if s.answer_provider == "gemini":
             from .gemini import gemini_generate
 
-            raw_text, generation_usage = gemini_generate(system, request.question, sources, history)
+            raw_text, generation_usage = gemini_generate(
+                system,
+                request.question,
+                sources,
+                history,
+                **({"on_delta": progress.feed, "cancelled": cancelled} if progress else {}),
+            )
         else:
-            raw = request_provider(
+
+            def generate(endpoint, payload):
+                if progress:
+                    content, usage = stream_provider(endpoint, payload, progress.feed, cancelled)
+                    return {"choices": [{"message": {"content": content}}], "usage": usage}
+                return request_provider(endpoint, payload)
+
+            raw = generate(
                 "chat/completions",
                 {
                     "model": s.answer_model,
@@ -241,6 +262,8 @@ def answer(db, request, history=None, retrieval_request=None):
                 generation_usage = raw.get("usage", {})
             except (KeyError, IndexError, TypeError):
                 raise ProviderError("Provider returned an unsupported answer format.") from None
+        if progress:
+            progress.feed("", force=True)
         try:
             parsed = parse_generated_answer(raw_text, quotes)
             generation_used = True
@@ -265,6 +288,9 @@ def answer(db, request, history=None, retrieval_request=None):
             raise ProviderError(
                 "Provider returned an unsupported answer format. Try extractive mode."
             ) from None
+    check_cancelled(cancelled)
+    if on_event:
+        on_event("status", {"message": "Checking source references…"})
     validate_claims(claims, evidence)
     if (
         not context

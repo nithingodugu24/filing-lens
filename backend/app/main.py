@@ -482,8 +482,19 @@ def search(request: SearchRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/questions", response_model=AnswerResponse, tags=["Questions"])
-def question(request: SearchRequest, db: Session = Depends(get_db)):
+def question(request: SearchRequest, connection: Request, db: Session = Depends(get_db)):
     """Answer from scoped source evidence, or return an explicit abstention. Simple report-overview requests use saved metadata. Optional remote generation validates citation IDs and literal quotes; numerical comparisons use Decimal arithmetic."""
+    if "text/event-stream" in connection.headers.get("accept", ""):
+        from .answer_stream import stream_answer
+
+        owner = dict(db.info)
+        db.rollback()
+
+        def generate(session, emit, cancelled):
+            verify_demo_facts(session)
+            return answer(session, request, on_event=emit, cancelled=cancelled)
+
+        return stream_answer(generate, owner)
     verify_demo_facts(db)
     response = answer(db, request)
     db.commit()

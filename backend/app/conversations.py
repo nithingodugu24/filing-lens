@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,21 @@ class ConversationRequest(SearchRequest):
 
 
 @router.post("", response_model=AnswerResponse)
-def converse(request: ConversationRequest, db: Session = Depends(get_db)):
+def converse(request: ConversationRequest, connection: Request, db: Session = Depends(get_db)):
+    if "text/event-stream" in connection.headers.get("accept", ""):
+        from .answer_stream import stream_answer
+
+        owner = dict(db.info)
+        db.rollback()
+        return stream_answer(
+            lambda session, emit, cancelled: run_conversation(request, session, emit, cancelled), owner
+        )
+    response = run_conversation(request, db)
+    db.commit()
+    return response
+
+
+def run_conversation(request, db, on_event=None, cancelled=None):
     session_id = str(request.session_id)
     # Serialise turns for a session on the primary PostgreSQL deployment.
     if db.bind.dialect.name == "postgresql":
@@ -50,7 +64,9 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
         query = query.model_copy(
             update={"question": (request.question + " (Previous question: " + topic + ")")[:2000]}
         )
-    response = answer(db, query, history=history)
+    response = answer(
+        db, query, history=history, **({"on_event": on_event, "cancelled": cancelled} if on_event else {})
+    )
     count = db.scalar(
         select(func.count())
         .select_from(ConversationHistory)
@@ -83,7 +99,6 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
             user_id=db.info.get("user_id"),
         )
     )
-    db.commit()
     return response
 
 

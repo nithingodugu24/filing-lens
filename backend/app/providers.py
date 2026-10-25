@@ -18,6 +18,66 @@ def tokens(text):
     return re.findall(r"[a-z0-9]+", text.lower())
 
 
+def stream_provider(endpoint, payload, on_delta, cancelled=None):
+    """Real upstream SSE; never replay a partially delivered generation on failure."""
+    import json
+    from .answer_progress import check_cancelled
+
+    settings = get_settings()
+    if not settings.provider_api_key:
+        raise ProviderError("Provider API key is missing. Configure the AI service on the server.")
+    text, usage, finish, done = [], {}, None, False
+    try:
+        with httpx.stream(
+            "POST",
+            f"{settings.provider_base_url.rstrip('/')}/{endpoint}",
+            json={**payload, "stream": True, "stream_options": {"include_usage": True}},
+            headers={"Authorization": f"Bearer {settings.provider_api_key}"},
+            timeout=settings.provider_timeout,
+        ) as response:
+            if response.status_code >= 400:
+                reason = {
+                    401: "The AI service rejected the API key.",
+                    429: "The AI service rate limit or quota was reached.",
+                }.get(response.status_code, "Check the AI model, service availability and streaming support.")
+                raise ProviderError(f"AI stream failed ({response.status_code}). {reason}")
+            for line in response.iter_lines():
+                check_cancelled(cancelled)
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    done = True
+                    break
+                event = json.loads(data)
+                if event.get("error"):
+                    raise ProviderError("The AI service interrupted the answer. Please try again.")
+                if event.get("usage"):
+                    usage = event["usage"]
+                for choice in event.get("choices", []):
+                    if choice.get("index", 0) != 0:
+                        continue
+                    delta = choice.get("delta", {}).get("content") or ""
+                    if not isinstance(delta, str):
+                        raise ValueError()
+                    if delta:
+                        text.append(delta)
+                        on_delta(delta)
+                    finish = choice.get("finish_reason") or finish
+            check_cancelled(cancelled)
+    except httpx.TimeoutException:
+        raise ProviderError("The AI stream timed out. Please try again.") from None
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        raise ProviderError(
+            "The AI connection was interrupted or returned an invalid stream. Please try again."
+        ) from None
+    if finish == "length":
+        raise ProviderError("The AI answer reached its length limit. Ask a more specific question.")
+    if not done and finish is None:
+        raise ProviderError("The AI stream stopped before the answer finished. Please try again.")
+    return "".join(text), usage
+
+
 def fingerprint():
     s = get_settings()
     return f"{s.embedding_provider}:{s.embedding_model}:{s.embedding_dimensions}"
