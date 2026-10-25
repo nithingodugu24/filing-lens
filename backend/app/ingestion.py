@@ -1,7 +1,6 @@
 import hashlib
 import re
 from datetime import timedelta
-from pathlib import Path
 
 import pymupdf
 from sqlalchemy import delete, select, update

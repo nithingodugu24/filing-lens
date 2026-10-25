@@ -17,7 +17,7 @@ def engine():
     if settings.database_url.startswith("sqlite"):
         settings.storage_dir.parent.mkdir(parents=True, exist_ok=True)
     return create_engine(settings.database_url, pool_pre_ping=True,
-                         connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {})
+                         connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {"connect_timeout": 10})
 
 
 def init_db():

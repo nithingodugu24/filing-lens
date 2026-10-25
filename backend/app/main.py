@@ -17,7 +17,11 @@ from .db import engine, get_db, init_db
 from .demo import seed_demo, verify_demo_facts
 from .ingestion import enqueue
 from .models import Chunk, Document, ExtractedTable, Fact, Job, Page, WorkerState
-from .schemas import DocumentMetadata, FactReview
+from .schemas import CompareRequest, DocumentMetadata, FactReview, SearchRequest
+from .answers import answer
+from .finance import compare_facts
+from .providers import ProviderError
+from .retrieval import retrieve
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("filinglens")
@@ -77,6 +81,11 @@ async def request_logging(request: Request, call_next):
 @app.exception_handler(ValueError)
 async def invalid_value(request, error):
     return JSONResponse({"detail": str(error), "request_id": getattr(request.state, "request_id", None)}, status_code=422)
+
+
+@app.exception_handler(ProviderError)
+async def provider_error(request, error):
+    return JSONResponse({"detail": str(error), "request_id": getattr(request.state, "request_id", None)}, status_code=503)
 
 
 @app.get("/api/health")
@@ -186,3 +195,21 @@ def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db))
         raise HTTPException(404, "Fact not found")
     fact.verified, fact.review_note = review.verified, review.note
     return {"id": fact.id, "verified": fact.verified}
+
+
+@app.post("/api/search")
+def search(request: SearchRequest, db: Session = Depends(get_db)):
+    evidence, usage = retrieve(db, request)
+    return {"evidence": evidence, "usage": usage, "mode": request.mode}
+
+
+@app.post("/api/questions")
+def question(request: SearchRequest, db: Session = Depends(get_db)):
+    verify_demo_facts(db)
+    return answer(db, request)
+
+
+@app.post("/api/compare")
+def compare(request: CompareRequest, db: Session = Depends(get_db)):
+    verify_demo_facts(db)
+    return compare_facts(db, request)
