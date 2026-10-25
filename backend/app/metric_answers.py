@@ -84,7 +84,11 @@ def metric_card(fact, doc, chunk, previous=None, target_units=None):
         "document_id": doc.id,
         "company": doc.company,
         "metric": fact.metric,
-        "label": (fact.source_details or {}).get("source_label", LABELS.get(fact.metric, fact.metric)),
+        "label": re.sub(
+            r"\s+\d[\d,\s]*$",
+            "",
+            (fact.source_details or {}).get("source_label", LABELS.get(fact.metric, fact.metric)),
+        ).rstrip("*† "),
         "value": str(value),
         "currency": fact.currency,
         "units": units,
@@ -111,7 +115,8 @@ def resolve_metric_answer(db, request):
     metric = requested_metric(request.question)
     text = request.question.casefold()
     if not metric or re.search(
-        r"\b(?:why|drivers?|explain|forecast|predict|next|expect|estimated?|cloud|segment|region)\b", text
+        r"\b(?:why|drivers?|explain|explanation|management|reasons?|affected|caused|forecast|predict|next|expect|estimated?|cloud|segment|region)\b",
+        text,
     ):
         return None
     change_requested = bool(
@@ -235,7 +240,7 @@ def resolve_metric_answer(db, request):
 def unsupported_metric_answer(db, request):
     """A text match is not a substitute for an unverified financial number."""
     if not requested_metric(request.question) or re.search(
-        r"\b(?:why|drivers?|explain|forecast|predict|next|expect|estimated?|segment|region|management)\b",
+        r"\b(?:why|drivers?|explain|explanation|management|reasons?|affected|caused|forecast|predict|next|expect|estimated?|segment|region)\b",
         request.question,
         re.I,
     ):

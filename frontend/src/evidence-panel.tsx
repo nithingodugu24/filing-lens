@@ -116,7 +116,7 @@ export function EvidencePanel({
           <div className="page-badge">
             PDF page {pageIndex + 1}
             <span>
-              Printed label:{" "}
+              PDF label:{" "}
               {page?.printed_label || e.printed_label || "not available"}
             </span>
           </div>

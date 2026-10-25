@@ -23,6 +23,10 @@ test("processing progress is readable while a long report is prepared", async ({
     }),
   );
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Your reports are being prepared" }),
   ).toBeVisible();
@@ -48,6 +52,10 @@ test("first-time screen explains the steps and offers sample reports", async ({
     });
   });
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", {
       name: "Start with a company report",
@@ -88,6 +96,10 @@ test("failed upload has a clear next step instead of a silent disabled form", as
     }),
   );
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Your report needs attention" }),
   ).toBeVisible();
@@ -103,6 +115,10 @@ test("failed upload has a clear next step instead of a silent disabled form", as
 });
 async function samples(page: import("@playwright/test").Page) {
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await page.getByLabel("Reports to use").selectOption("samples");
   await expect(
     page.getByText("4 sample reports ready", { exact: true }),
@@ -279,6 +295,10 @@ test("sample data and uploaded reports are kept separate in questions", async ({
     });
   });
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await expect(page.getByText("1 report ready", { exact: true })).toBeVisible();
   await page.getByLabel("Your question").fill("Revenue details");
   await page.getByRole("button", { name: "Find answer", exact: true }).click();

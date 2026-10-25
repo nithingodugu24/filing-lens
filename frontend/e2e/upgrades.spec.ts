@@ -2,32 +2,15 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function samples(page: Page) {
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await page.getByLabel("Reports to use").selectOption("samples");
   await expect(
     page.getByText("4 sample reports ready", { exact: true }),
   ).toBeVisible();
 }
-test("dashboard shows checked trends and respects selected company", async ({
-  page,
-}) => {
-  await samples(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: "Dashboard", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Revenue over time" }),
-  ).toBeVisible();
-  await expect(page.locator(".kpi-card").first()).toContainText("4");
-  await expect(page.locator(".recharts-line")).toHaveCount(2);
-  await page.screenshot({
-    path: "../docs/screenshots/dashboard.png",
-    fullPage: true,
-  });
-  await page.getByLabel("Company filter", { exact: true }).selectOption("TCS");
-  await expect(page.locator(".kpi-card").first()).toContainText("2");
-  await expect(page.locator(".recharts-line")).toHaveCount(1);
-});
 test("conversation keeps follow-up turns and opens cited pages", async ({
   page,
 }) => {
@@ -96,13 +79,9 @@ test("source highlighting, PDF navigation and saved note work together", async (
   await reader
     .getByRole("button", { name: "Save note for selected text" })
     .click();
-  await reader
-    .getByLabel("Your note")
-    .fill(noteText);
+  await reader.getByLabel("Your note").fill(noteText);
   await reader.getByRole("button", { name: "Save note", exact: true }).click();
-  const note = reader
-    .locator(".note-card")
-    .filter({ hasText: noteText });
+  const note = reader.locator(".note-card").filter({ hasText: noteText });
   await expect(note).toBeVisible();
   await note.getByRole("button", { name: "Delete note", exact: true }).click();
   await expect(note).not.toBeVisible();
@@ -126,8 +105,7 @@ test("exports download and dark mode persists on mobile", async ({ page }) => {
     "Ask a question",
     "My reports",
     "Compare numbers",
-    "Dashboard",
-    "Knowledge graph",
+    "Report overview",
   ])
     await expect(
       page
@@ -182,48 +160,16 @@ test("account screen signs in and sends bearer headers", async ({ page }) => {
   await page.getByLabel("Password", { exact: true }).fill("test-password-long");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Test Analyst", { exact: true })).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await expect(page.getByLabel("Reports to use")).toBeVisible();
   expect(authorised).toBeTruthy();
   await page.getByText("Test Analyst", { exact: true }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
-  ).toBeVisible();
-});
-
-test("knowledge graph nodes open their source mentions", async ({ page }) => {
-  await page.route("**/knowledge-graph", (route) =>
-    route.fulfill({
-      json: {
-        enabled: true,
-        status: "complete",
-        error: null,
-        limitation: "Edges mean mentioned together in a sentence.",
-        nodes: [
-          {
-            id: "node-1",
-            text: "TCS",
-            type: "COMPANY",
-            page_index: 0,
-            count: 1,
-            mentions: [
-              { page_index: 0, sentence: "TCS synthetic quarterly results." },
-            ],
-          },
-        ],
-        edges: [],
-      },
-    }),
-  );
-  await samples(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: "Knowledge graph", exact: true })
-    .click();
-  await page.getByRole("button", { name: "TCS · 1", exact: true }).click();
-  await page.getByRole("button", { name: "Open page 1", exact: true }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Evidence reader" }),
   ).toBeVisible();
 });
 

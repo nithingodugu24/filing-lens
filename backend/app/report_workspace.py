@@ -50,7 +50,7 @@ def prepare_brief(db, document_id):
         brief = ReportBrief(document_id=doc.id)
         db.add(brief)
     brief.updated_at = now()
-    brief.version = "report-brief-v2"
+    brief.version = "report-brief-v3"
     if get_settings().answer_provider == "extractive":
         brief.status, brief.content = "metrics_only", {}
         return
@@ -96,11 +96,12 @@ def prepare_brief(db, document_id):
                     "limitation": response["limitation"] if not accepted else None,
                 }
             )
+        cited_ids = {citation for claim in claims for citation in claim["citation_ids"]}
         brief.content = {
             **response,
             "run_id": None,
             "claims": claims,
-            "evidence": list(sources.values()),
+            "evidence": [e for key, e in sources.items() if key in cited_ids],
             "sections": sections,
             "abstained": not claims,
             "confidence": None,

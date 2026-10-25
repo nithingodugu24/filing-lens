@@ -1,10 +1,10 @@
 # FilingLens
 
-**Indian Financial Filings Intelligence** — a portfolio application for asking evidence-backed questions, inspecting source pages and comparing reviewed financial metrics.
+**Understand Indian company reports.** Open an annual report, see its financial figures and cited brief, ask questions, inspect the source, compare years and export your work.
 
 FastAPI · React + TypeScript · PostgreSQL full-text search · pgvector · MiniLM / FinBERT · PDF worker · Docker Compose
 
-> **The included TCS and Infosys PDFs are synthetic.** Every figure and management statement in them is invented for software testing. No real issuer PDFs are redistributed. Offline answers are verbatim extracts, not generated financial analysis.
+> The primary workspace uses real reports. Four official Infosys/Wipro annual reports can be prepared from the pinned issuer manifest; source PDFs and model weights stay out of Git. Separate synthetic TCS/Infosys fixtures support repeatable software tests. Automated source checks are distinct from human review.
 
 ## Run the complete application
 
@@ -15,7 +15,15 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up -d --build
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Upload report** to use your own PDF, or **Try with sample reports** to explore the four made-up examples. Wait for the report status to say **Ready**. Your uploads and sample reports are kept separate. No API key or embedding-model download is required. Fonts are bundled locally. Initial dependency/image downloads require internet access.
+Open [http://localhost:5173](http://localhost:5173). The **Report overview** is the starting point. Upload a PDF or open a prepared issuer report. The lightweight defaults support source figures and extractive passages without credentials; generated briefs and narrative answers require a configured AI service. See the [upgrade guide](docs/UPGRADE_GUIDE.md) for provider and MiniLM setup. Your existing private configuration is retained.
+
+Prepare the official example library after starting the app:
+
+```powershell
+docker compose exec -T backend python -m app.prepare_library
+```
+
+The command downloads the original issuer PDFs, checks pinned SHA-256 hashes, queues indexing and prepares annual financial rows and briefs. It is repeatable and preserves existing uploads, reviews and notes. In an account deployment, opening a library report creates a source-preserving copy owned by that account. It never makes private uploads public.
 
 - Interface: [localhost:5173](http://localhost:5173)
 - Interactive API: [localhost:5173/api/docs](http://localhost:5173/api/docs)
@@ -27,33 +35,33 @@ If `.env` already exists, retain your values. The defaults work without copying 
 
 ## What works
 
-- Upload digital PDFs up to 100 MB / 500 pages, with explicit company, type, reporting dates, publication date, currency, units, basis and optional official URL. The interface reads the configured limit from the API and shows selected file size.
+- Upload digital PDFs up to 100 MB / 750 pages, with explicit company, type, reporting dates, publication date, currency, units, basis and optional official URL. The interface reads the configured limit from the API and shows selected file size.
 - SHA-256 duplicate detection, retryable background jobs, page-bounded text extraction and grid-table extraction. Scanned, empty, encrypted, damaged and poorly extracted PDFs fail clearly.
 - Annual-report processing removes artificial column-spacing before counting text limits, shows page progress, and keeps table chunks small enough for retrieval. Default budgets: 250,000 characters per page and 10,000,000 per report; configure `MAX_PAGE_TEXT_CHARS`, `MAX_DOCUMENT_TEXT_CHARS` and `MAX_PDF_PAGES` if needed.
 - Company/type/period/publication-cutoff filtering **before** keyword, cosine-vector or reciprocal-rank-fusion retrieval. Unknown publication dates are excluded by cutoff queries.
 - Extractive answers with clickable evidence, original PDF preview at the cited page, separate printed page labels and run diagnostics.
 - Simple prompts such as **What is this?** identify the selected report, dates and page count, with an opening-page link. Vague prompts ask for clarification; follow-up buttons help you choose a specific question. These local overviews use saved metadata and actual source pages, without model credentials.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
-- Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
-- Simple question/report/comparison screens plus a checked-financial **Dashboard** and source-linked **Knowledge graph**. Dark mode, mobile bottom navigation and keyboard-accessible dialogs.
+- Automatic financial row extraction from supported bordered and borderless annual tables. Explicit years, basis and currency units plus accounting identities gate publication; conflicting rows are held back. Human review remains available for candidates. Unverified numeric lookups do not fall back to unrelated paragraphs. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
+- A report overview with revenue, total income, profit, prior-year changes, a cited brief, source reader and export. Questions can use one report or explicit broader filters. A bounded people/organisation directory replaces the graph in the main workflow. Dark mode and mobile navigation are supported.
 - A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
 - Local sentence-transformer embeddings, optional Gemini conversations, token-bounded FinBERT commentary tone, spaCy financial entities, PDF quote highlights and saved notes.
-- Optional JWT accounts and per-owner access, live worker notifications over WebSockets, and PDF/Excel/CSV/Markdown exports.
+- Optional local JWT accounts and per-owner access, saved question history, live worker notifications, and PDF/Excel/CSV/Markdown exports. Production startup requires authentication, semantic embeddings, a configured AI service, explicit HTTPS origins and a private PostgreSQL password. Public registration never creates an administrator in production.
 - Expanded automated tests, 30-question model comparisons, fixed evaluation artifacts and GitHub Actions configuration. [Upgrade/setup guide](docs/UPGRADE_GUIDE.md).
 
 For the complete local model setup, Gemini credentials, optional accounts and research limitations, use the [upgrade guide](docs/UPGRADE_GUIDE.md). The light default remains key-free; the ML profile installs CPU model packages and caches downloaded weights.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 
-## Try it
+## Use a report
 
-1. Select **Sample reports** under **Reports to use**, then **TCS**, both periods. Ask **What changed in operating margin between these quarters?**
-2. Inspect the invented 24% and 25% inputs and the +1 percentage-point result. Click a citation and open PDF page 1.
-3. Select both companies. Ask **Compare revenue growth for TCS and Infosys.** The fixture results are +2.5% and +4%.
-4. In **Compare numbers**, compare TCS margins in basis points: +100 bps.
-5. Ask **What is the share price?** The corpus cannot answer. Inspect harder failure cases in the evaluation report.
+1. Open **Report overview** and choose a real report. Check the reporting year and consolidated/standalone basis.
+2. Read the main figures and year-on-year changes. Each card opens its actual PDF source page.
+3. Select a suggested question or **Ask about this report**. The question scope shows which report is being used.
+4. Open **Compare numbers** to compare checked source rows with matching periods, currencies and basis.
+5. Export the report brief or an answer. Reopen earlier questions under **Recent answers**.
 
-Full [demo walkthrough](docs/DEMO.md) · [architecture and tradeoffs](docs/ARCHITECTURE.md) · [API guide](docs/API.md) · [source provenance](docs/PROVENANCE.md).
+See [product scope and launch gates](docs/PRODUCT_PLAN.md), [production setup](docs/PRODUCTION_SETUP.md), [real-source acceptance checks](docs/REAL_REPORT_CHECKS.md), [architecture](docs/ARCHITECTURE.md) and [source provenance](docs/PROVENANCE.md).
 
 ## Evaluation: actual runs, including failures
 

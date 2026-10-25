@@ -2,6 +2,10 @@ import { test, expect } from "@playwright/test";
 
 async function selectedSample(page: import("@playwright/test").Page) {
   await page.goto("/");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Ask a question", exact: true })
+    .click();
   await page.getByLabel("Reports to use").selectOption("samples");
   await page.getByLabel("Company filter").selectOption("TCS");
   await page.getByLabel("Period filter").selectOption("2025-09-30");

@@ -1,6 +1,6 @@
 # Dataset provenance and limitations
 
-The shipped corpus consists of four **synthetic, invented** two-page PDFs created by `backend/app/demo.py`: TCS and Infosys, Q1 and Q2 FY26. The company names identify demo entities, not actual issuer disclosures. Revenue figures, margins, explanations and draft conflicts were written for testing. Each PDF and the interface prominently labels this. No investment conclusions may be drawn from them.
+The historical evaluation corpus consists of four **synthetic, invented** two-page PDFs created by `backend/app/demo.py`: TCS and Infosys, Q1 and Q2 FY26. The company names identify demo entities, not actual issuer disclosures. Revenue figures, margins, explanations and draft conflicts were written for testing. Each PDF and the interface prominently labels this. No investment conclusions may be drawn from them.
 
 Page 1 contains a small grid with revenue and operating margin. Page 2 contains invented commentary. The Infosys Q2 fixture deliberately includes contradictory draft demand commentary. The corpus contains no share price, executive names, real forecast or separately disclosed cloud revenue.
 
@@ -12,4 +12,13 @@ Question labels and expected evidence in `evaluation/questions.json` were author
 
 The evaluation report records the question-file hash, exact PDF hashes, backend and provider configuration. Tiny synthetic data does not establish performance on real disclosures, scanned PDFs, complex tables or adversarial documents. Keyword overlap can produce a valid quotation that does not answer the question. Quote support is an automated string check, not a human judgement of answer support.
 
-A subsequent user-uploaded 360-page annual report was tested for extraction, indexing, source-linked questions and PDF-page viewing. The file remains in local private storage and is not included in Git. Its cover identified FY 2025–26; an incorrect quarterly/October label was corrected, with the previous metadata saved locally. This workflow check does not verify every extracted table or financial value and is separate from the synthetic evaluation. No financial facts from the upload were automatically marked reviewed.
+A subsequent user-uploaded 360-page annual report was tested for extraction, indexing, source-linked questions and PDF-page viewing. The file remains in local private storage and is not included in Git. Its cover identified FY 2025–26; an incorrect quarterly/October label was corrected, with the previous metadata saved locally. This workflow check does not verify every extracted table or financial value and is separate from the synthetic evaluation. The current parser additionally publishes 24 automatically source-checked financial facts from explicit table rows for both bases and two years. This is recorded as automatic checking, not human review or independent audit. The reported income-question acceptance case is documented separately.
+
+
+## Prepared issuer library
+
+`backend/app/library.py` pins official Infosys annual reports for FY 2023–24 and FY 2024–25 and Wipro annual reports for those two years. The preparation command downloads from the issuer URLs and rejects changed hashes pending operator review. The complete PDFs remain in local storage and are not committed. Each library entry retains issuer URL, byte hash, company, reporting period, accounting basis and page references. Publication dates remain unknown and are not invented.
+
+Each of these four reports currently has 24 automatically checked financial rows: six supported metrics × two years × two accounting bases. Table layout handling is conservative and does not establish universal extraction accuracy. Supported financial values are copied from literal cells, with accounting identities and explicit column context checked. Wipro reports amounts in millions; display conversion to crore uses Decimal, while export retains source units.
+
+Library templates are deliberately registered only from the pinned issuer manifest. Authenticated readers receive their own copies with remapped evidence references. Private uploads are never added to the public library automatically.

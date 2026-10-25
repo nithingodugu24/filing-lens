@@ -96,7 +96,7 @@ def main():
             if doc.status == "indexed":
                 result = backfill_layout(db, doc)
                 brief = db.scalar(select(ReportBrief).where(ReportBrief.document_id == doc.id))
-                if not brief or brief.version != "report-brief-v2":
+                if not brief or brief.version != "report-brief-v3":
                     enqueue_analysis(db, doc.id, "brief")
                 print(item["id"], doc.status, result, flush=True)
             else:

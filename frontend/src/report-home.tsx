@@ -101,7 +101,11 @@ export function ReportHome({
   const latest =
     data?.financials.filter((m) => m.period_end === doc?.period_end) || [];
   const mainMetrics = ["revenue", "total_income", "net_profit"];
-  const cards = latest.filter((m) => mainMetrics.includes(m.metric));
+  const cards = latest
+    .filter((m) => mainMetrics.includes(m.metric))
+    .sort(
+      (a, b) => mainMetrics.indexOf(a.metric) - mainMetrics.indexOf(b.metric),
+    );
   async function openExample(item: LibraryItem) {
     setOpening(item.id);
     setError("");
@@ -208,9 +212,13 @@ export function ReportHome({
                 className="button secondary"
                 disabled={doc.status !== "indexed"}
                 onClick={() =>
-                  downloadReport([doc.id], "pdf", true).catch((e) =>
-                    setError(e.message),
-                  )
+                  downloadReport(
+                    [doc.id],
+                    "pdf",
+                    false,
+                    undefined,
+                    basis,
+                  ).catch((e) => setError(e.message))
                 }
               >
                 <Download size={16} /> Export brief
@@ -274,7 +282,9 @@ export function ReportHome({
                     <span className="status indexed">
                       {data.brief.status === "ready"
                         ? "Cited brief"
-                        : "Report brief"}
+                        : data.brief.status === "limited"
+                          ? "Partial brief"
+                          : "Report brief"}
                     </span>
                   </div>
                   {data.brief.content.claims

@@ -18,6 +18,7 @@ from types import SimpleNamespace
 
 from .db import get_db
 from .models import Chunk, Document, Fact, QueryRun, ReportBrief
+from .financial_metrics import LABELS
 
 router = APIRouter(prefix="/api/export", tags=["Export"])
 _plot_lock = Lock()
@@ -28,6 +29,7 @@ class ExportRequest(BaseModel):
     format: Literal["pdf", "xlsx", "md", "csv"] = "pdf"
     include_qa: bool = False
     run_id: str | None = Field(default=None, max_length=32)
+    basis: Literal["consolidated", "standalone"] | None = None
 
 
 def safe_cell(value):
@@ -57,7 +59,7 @@ def export_facts_csv(facts):
     return output.getvalue().encode("utf-8-sig")
 
 
-def scoped_facts(db, ids=None):
+def scoped_facts(db, ids=None, basis=None):
     query = (
         select(Fact, Document, Chunk)
         .join(Document, Document.id == Fact.document_id)
@@ -66,6 +68,8 @@ def scoped_facts(db, ids=None):
     )
     if ids is not None:
         query = query.where(Document.id.in_(ids))
+    if basis is not None:
+        query = query.where(Fact.basis == basis)
     return [
         {
             "id": f.id,
@@ -95,7 +99,7 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         "",
         "## Executive Summary",
         "",
-        f"{len(documents)} reports; {len(facts)} checked financial figures. This report contains source excerpts and deterministic calculations. Verify cited pages before relying on the analysis.",
+        f"{len(documents)} report{'s' if len(documents) != 1 else ''}; {len(facts)} checked financial figures. This report contains source-linked findings and financial figures. Verify cited pages before relying on the analysis.",
     ]
     if any(d.synthetic for d in documents):
         lines += ["", "**Includes made-up sample data.**"]
@@ -111,8 +115,14 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         lines += [f"### {run.question}", "", run.response.get("summary", "")]
         if run.response.get("abstained"):
             lines.append(run.response["limitation"])
+        by_id = {e["id"]: e for e in run.response.get("evidence", [])}
         for claim in run.response.get("claims", []):
-            lines.append(claim["text"] + " [" + ", ".join(claim["citation_ids"]) + "]")
+            refs = [
+                f"{by_id[c]['company']}, PDF page {by_id[c]['page_index'] + 1}"
+                for c in claim["citation_ids"]
+                if c in by_id
+            ]
+            lines.append(claim["text"] + " [" + "; ".join(dict.fromkeys(refs)) + "]")
     lines += ["", "## Comparative Analysis", ""]
     lines += [
         f"- {c.get('company', '')}: {c['result']} {c['units']}. Formula: {c['formula']}. Inputs: {json.dumps(c.get('normalised_inputs', {}))}"
@@ -124,8 +134,10 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         for d in documents
     ]
     for run in questions_asked:
+        cited = {citation for claim in run.response.get("claims", []) for citation in claim["citation_ids"]}
         for e in run.response.get("evidence", []):
-            lines.append(f"- {e['id']}: {e['title']}, PDF page {e['page_index'] + 1}.")
+            if e["id"] in cited:
+                lines.append(f"- {e['title']}, PDF page {e['page_index'] + 1}.")
     if format == "md":
         return "\n".join(lines).encode("utf-8")
     if format == "xlsx":
@@ -248,6 +260,8 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
     styles["Title"].textColor = colors.HexColor("#14634b")
     styles["Normal"].spaceAfter = 6
     styles["Normal"].leading = 14
+    styles["Heading2"].keepWithNext = True
+    styles["Heading3"].keepWithNext = True
     story = []
     source_numbers = {d.id: str(i + 1) for i, d in enumerate(documents)}
     table = None
@@ -259,7 +273,7 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
             )
             values = [
                 f["company"],
-                f["metric"].replace("_", " "),
+                LABELS.get(f["metric"], f["metric"].replace("_", " ")),
                 amount,
                 f["period_end"],
                 f["basis"],
@@ -289,7 +303,9 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         if in_metrics and line.startswith("- "):
             continue
         if not line:
-            story.append(Spacer(1, 8))
+            spacer = Spacer(1, 8)
+            spacer.keepWithNext = True
+            story.append(spacer)
         else:
             if line.startswith("## "):
                 story.append(CondPageBreak(100))
@@ -375,12 +391,14 @@ def report(request: ExportRequest, db: Session = Depends(get_db)):
         if request.run_id:
             statement = statement.where(QueryRun.id == request.run_id)
         for run in db.scalars(statement):
+            if run.configuration.get("purpose") == "report_brief":
+                continue
             cited = {e["document_id"] for e in run.response.get("evidence", [])}
             if cited and cited <= ids:
                 runs.append(run)
         if request.run_id and not runs:
             raise HTTPException(404, "This answer was not found in the selected reports")
-    facts = scoped_facts(db, ids)
+    facts = scoped_facts(db, ids, request.basis)
     if not request.run_id:
         saved_ids = {r.id for r in runs}
         for brief in db.scalars(

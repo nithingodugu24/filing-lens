@@ -7,6 +7,7 @@ export async function downloadReport(
   format: string,
   includeQa: boolean,
   runId?: string,
+  basis?: string,
 ) {
   const response = await apiFetch("/export/report", {
     method: "POST",
@@ -15,6 +16,7 @@ export async function downloadReport(
       document_ids: ids,
       format,
       include_qa: includeQa,
+      ...(basis ? { basis } : {}),
       ...(runId ? { run_id: runId } : {}),
     }),
   });
