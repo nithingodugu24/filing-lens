@@ -30,6 +30,8 @@ def filtered_statement(filters):
     )
     if filters.companies:
         stmt = stmt.where(Document.company.in_(filters.companies))
+    if filters.document_ids:
+        stmt = stmt.where(Document.id.in_(filters.document_ids))
     if filters.document_types:
         stmt = stmt.where(Document.document_type.in_(filters.document_types))
     if filters.period_ends:

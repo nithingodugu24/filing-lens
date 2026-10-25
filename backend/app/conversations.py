@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .answers import answer
 from .db import get_db
-from .models import ConversationHistory
+from .models import ConversationHistory, now
 from .schemas import SearchRequest, AnswerResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
@@ -56,10 +57,12 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
         .where(ConversationHistory.session_id == session_id, ConversationHistory.role == "user")
     )
     response.update(session_id=session_id, turn_number=count + 1)
+    turn_time = now()
     db.add(
         ConversationHistory(
             session_id=session_id,
             role="user",
+            created_at=turn_time,
             content=request.question,
             evidence_ids=[],
             filters=filters,
@@ -70,6 +73,7 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
         ConversationHistory(
             session_id=session_id,
             role="assistant",
+            created_at=turn_time + timedelta(microseconds=1),
             content=response.get("summary")
             or " ".join(c["text"] for c in response["claims"])
             or response["limitation"],

@@ -40,6 +40,7 @@ import { Conversation, Confidence } from "./conversation";
 import { AuthProvider, useAuth } from "./auth";
 import { ExportModal, downloadReport } from "./export";
 import { connectStatus } from "./websocket";
+import { MetricCard } from "./metric-card";
 
 const Dashboard = React.lazy(() =>
   import("./dashboard").then((module) => ({ default: module.Dashboard })),
@@ -85,7 +86,7 @@ function App() {
     [selectedPeriod, setPeriod] = useState("all"),
     [docType, setDocType] = useState("all"),
     [cutoff, setCutoff] = useState(""),
-    [mode, setMode] = useState("keyword");
+    [mode, setMode] = useState("hybrid");
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -914,7 +915,8 @@ function App() {
                                       {answer.limitation}
                                     </p>
                                   )}
-                                {answer.claims.map((claim, i) => (
+                                <div className="metric-grid">{answer.metric_answers?.map(m => <MetricCard key={m.fact_id} metric={m} evidence={evidenceById.get(m.citation_id)} onEvidence={setSelected} />)}</div>
+                                {(!answer.metric_answers?.length ? answer.claims : []).map((claim, i) => (
                                   <article className="claim" key={i}>
                                     <h3>
                                       {claim.citation_ids

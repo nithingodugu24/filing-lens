@@ -19,7 +19,9 @@ def period_label(start: date, end: date):
     fiscal_end = end.year + 1 if end.month >= 4 else end.year
     quarter = ((end.month - 4) % 12) // 3 + 1
     return {
-        "fiscal": f"Q{quarter} FY{str(fiscal_end)[-2:]}",
+        "fiscal": f"FY {start.year}–{str(end.year)[-2:]}"
+        if 300 <= (end - start).days <= 370 and start.month == 4 and end.month == 3
+        else f"Q{quarter} FY{str(fiscal_end)[-2:]}",
         "calendar": f"{start.isoformat()} to {end.isoformat()}",
     }
 

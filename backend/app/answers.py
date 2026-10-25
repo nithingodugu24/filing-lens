@@ -159,8 +159,15 @@ def answer(db, request, history=None):
     confidence = None
     generation_used = False
     kind = question_kind(request.question)
+    from .metric_answers import resolve_metric_answer
+
+    financial = resolve_metric_answer(db, request) if kind == "answer" else None
     context = context_answer(db, request, kind) if kind != "answer" else None
-    if context:
+    if financial:
+        evidence, embedding_usage = financial["evidence"], {}
+        claims, abstained, limitation = financial["claims"], False, financial["limitation"]
+        calculations = financial["calculations"]
+    elif context:
         evidence, embedding_usage = context["evidence"], {}
         claims, abstained, limitation = context["claims"], context["abstained"], context["limitation"]
         calculations = []
@@ -169,7 +176,7 @@ def answer(db, request, history=None):
         claims, abstained, limitation = extractive_answer(request.question, evidence)
         calculations = numerical_answers(db, request, evidence)
     usage = {"embedding": embedding_usage, "generation": {}}
-    if not context and s.answer_provider != "extractive" and evidence:
+    if not context and not financial and s.answer_provider != "extractive" and evidence:
         sources, quotes = generation_sources(evidence)
         if s.answer_provider not in {"openai", "gemini"} or (
             s.answer_provider == "openai" and not s.answer_model
@@ -257,7 +264,13 @@ def answer(db, request, history=None):
                 "Provider returned an unsupported answer format. Try extractive mode."
             ) from None
     validate_claims(claims, evidence)
-    if not context and not claims and not calculations and (not generation_used or not limitation.strip()):
+    if (
+        not context
+        and not financial
+        and not claims
+        and not calculations
+        and (not generation_used or not limitation.strip())
+    ):
         limitation = "I couldn't find supporting information in the selected reports. Try a more specific question or choose another report."
     latency = round((time.perf_counter() - start) * 1000, 2)
     cost = None
@@ -287,6 +300,13 @@ def answer(db, request, history=None):
             answer_provider="local_context",
             answer_model=None,
         )
+    if financial:
+        configuration.update(
+            answer_provider="source_tables",
+            retrieval="checked_financial_rows",
+            requested_retrieval=request.mode,
+            answer_model=None,
+        )
     run = QueryRun(
         configuration=configuration,
         citation_ids=[e["id"] for e in evidence],
@@ -300,7 +320,7 @@ def answer(db, request, history=None):
     db.flush()
     response = {
         "run_id": run.id,
-        "mode": "extractive" if context else s.answer_provider,
+        "mode": "financial" if financial else "extractive" if context else s.answer_provider,
         "answer_kind": kind,
         "summary": context["summary"] if context else "",
         "report_overviews": context["report_overviews"] if context else [],
@@ -315,6 +335,7 @@ def answer(db, request, history=None):
         "usage": usage,
         "cost_usd": cost,
         "confidence": confidence,
+        "metric_answers": financial["metric_answers"] if financial else [],
     }
     run.response = response
     return response

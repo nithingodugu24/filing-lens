@@ -460,6 +460,7 @@ def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db))
         raise HTTPException(404, "Fact not found")
     require_document(db, fact.document_id)
     fact.verified, fact.review_note = review.verified, review.note
+    fact.verification_method = "manual"
     if review.revision:
         fact.revision = review.revision
     db.commit()

@@ -81,6 +81,7 @@ export interface Calculation {
   }[];
 }
 export interface Answer {
+  metric_answers?: MetricAnswer[];
   run_id: string;
   mode: string;
   answer_kind?: "answer" | "report_overview" | "clarification" | "help";
@@ -112,6 +113,26 @@ export interface Answer {
   cost_usd: number | null;
   configuration: Record<string, unknown>;
   usage: Record<string, unknown>;
+}
+export interface MetricAnswer {
+  fact_id: string;
+  document_id: string;
+  company: string;
+  metric: string;
+  label: string;
+  value: string;
+  currency: string;
+  units: string;
+  basis: string;
+  period_start: string;
+  period_end: string;
+  source_page: number;
+  citation_id: string;
+  previous_value: string | null;
+  previous_period_end: string | null;
+  change_percent: string | null;
+  verification_method: string;
+  source_details: { row_text?: string; checks?: string[] };
 }
 export function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("filinglens-token");

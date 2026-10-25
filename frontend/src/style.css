@@ -2724,3 +2724,13 @@ button:active:not(:disabled) {
   background: var(--surface);
   color: var(--muted);
 }
+.metric-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:20px 0 }
+.metric-card { border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:22px;min-width:0 }
+.metric-label {font-weight:600;color:var(--muted);font-size:13px}
+.metric-amount {font-size:32px;letter-spacing:-1px;font-weight:700;margin:8px 0;color:var(--text)}
+.metric-amount>span {font-size:16px;letter-spacing:0;font-weight:500}
+.metric-card>p {font-size:12px;margin:10px 0;color:var(--muted)}
+.metric-change {display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:13px}
+.metric-change>span {width:100%;color:var(--muted)}
+.metric-source {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:20px;border-top:1px solid var(--border);padding-top:12px}
+.metric-source small {font-size:11px;color:var(--muted)}

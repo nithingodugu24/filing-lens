@@ -31,6 +31,7 @@ class Filters(BaseModel):
     period_ends: list[date] = Field(default_factory=list, max_length=16)
     publication_cutoff: date | None = None
     synthetic: bool | None = None
+    document_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class SearchRequest(BaseModel):
@@ -159,6 +160,7 @@ class AnswerResponse(ApiModel):
     usage: dict
     cost_usd: float | None
     confidence: float | None
+    metric_answers: list[dict] = Field(default_factory=list)
 
 
 class AnalyticsResponse(BaseModel):

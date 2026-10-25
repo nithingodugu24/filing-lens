@@ -95,6 +95,19 @@ class Fact(Base):
     verified: Mapped[bool] = mapped_column(default=False)
     review_note: Mapped[str | None] = mapped_column(Text)
     revision: Mapped[str] = mapped_column(String(20), default="original")
+    verification_method: Mapped[str] = mapped_column(String(24), default="manual")
+    source_details: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ReportBrief(Base):
+    __tablename__ = "report_briefs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="preparing")
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[str] = mapped_column(String(40), default="report-brief-v1")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class QueryRun(Base):

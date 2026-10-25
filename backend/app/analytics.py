@@ -14,7 +14,11 @@ def analytics(db, synthetic=None, document_ids=None):
     if document_ids is not None:
         docs = [d for d in docs if d.id in document_ids]
     by_id = {d.id: d for d in docs}
-    facts = [f for f in db.scalars(select(Fact).where(Fact.verified.is_(True))) if f.document_id in by_id]
+    facts = [
+        f
+        for f in db.scalars(select(Fact).where(Fact.verified.is_(True)))
+        if f.document_id in by_id and f.basis == by_id[f.document_id].basis
+    ]
     counts = Counter(
         (
             by_id[f.document_id].company,
@@ -84,7 +88,10 @@ def analytics(db, synthetic=None, document_ids=None):
                 "latest_revenue": rev[-1]["value"] if rev else None,
                 "latest_margin": margins[-1]["value"] if margins else None,
                 "revenue_growth": growth,
-                "metric_coverage": len({f.metric for f in facts if by_id[f.document_id].company == company})
+                "metric_coverage": len(
+                    {f.metric for f in facts if by_id[f.document_id].company == company}
+                    & {"revenue", "operating_margin"}
+                )
                 / 2
                 * 100,
             }

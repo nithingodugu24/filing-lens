@@ -120,6 +120,12 @@ def extract_pdf(path, progress=None):
                         tables.append((index, number, cells))
             except Exception:
                 warnings.append(f"Table extraction unavailable on PDF page {index + 1}.")
+            if re.search(r"total\s+income", text, re.I) and re.search(r"other\s+income", text, re.I):
+                from .financial_layout import financial_layout
+
+                cells = financial_layout(page)
+                if cells:
+                    tables.append((index, 10000, cells))
             if progress and ((index + 1) % 10 == 0 or index + 1 == len(pdf)):
                 progress(index + 1, len(pdf), "reading")
         good_pages = sum(len(re.findall(r"\w", p[2])) >= 40 for p in pages)
@@ -206,7 +212,7 @@ def process_document(db, document, progress=None):
             chunk.embedding_config = fingerprint()
             db.add(chunk)
     db.flush()
-    # Conservative candidates: explicit metric/value/currency/unit rows only. Never auto-verify uploads.
+    # Legacy explicit four-column rows stay candidates until reviewed.
     # Parse candidates once from the full table, not overlapping retrieval chunks.
     for index, number, cells in tables:
         table_id = f"{document.id}:p{index}:t{number}"
@@ -244,6 +250,10 @@ def process_document(db, document, progress=None):
                     revision="original",
                 )
             )
+    db.flush()
+    from .financial_metrics import extract_financial_metrics
+
+    extract_financial_metrics(db, document)
     document.page_count = len(pages)
     document.warning = " ".join(warnings) or None
     document.status = "indexed"

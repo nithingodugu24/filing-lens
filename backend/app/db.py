@@ -41,6 +41,7 @@ def init_db():
                 "question": "TEXT",
                 "response": "JSON",
             },
+            "facts": {"verification_method": "VARCHAR(24) DEFAULT 'manual'", "source_details": "JSON"},
         }.items():
             present = {c["name"] for c in inspect(conn).get_columns(table)}
             for name, definition in additions.items():
