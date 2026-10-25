@@ -27,3 +27,10 @@ Interface follow-up: `Make app simple and easy to use` — three clear tabs, lar
 Processing follow-up: `Fix annual report processing and answers` — normalise PDF column spacing, configurable text budgets, visible progress, bounded table chunks and contiguous source quotations. The previously failed 360-page report is indexed, with its annual reporting label corrected from the cover. Verification: 41 backend tests on SQLite/PostgreSQL, eleven browser checks and actual source-page/question checks on the uploaded report.
 
 Question follow-up: `Explain simple questions about reports` — common orientation prompts return selected-report metadata and real opening-page links; vague prompts clarify, help prompts explain the workflow, and follow-up questions are clickable. Financial queries remain evidence-based. Verification expanded to 50 backend tests and thirteen browser checks, including the exact “what is this?” prompt against the uploaded report.
+
+## Final-year project upgrades
+
+1. `9b78fb9 Add local ML models and proper evaluation tools` — optional cached sentence-transformer provider, real dimension/normalisation checks, 30-question regression set, IR/answer metrics and reproducible isolated benchmark scripts.
+2. `5ebad74 Add checked analytics and research APIs` — checked-series analytics, Gemini adapter and persisted conversations, FinBERT/spaCy analysis jobs, JWT ownership/roles, notes, exports, durable live events and actual 270-run evaluation artifacts.
+3. `3dcd3f8 Add simple research screens and complete upgrade features` — dashboard, conversations, PDF highlights/notes, entity exploration, dark/mobile layout, account screens, downloads, live notifications, model packaging and API contracts. This installation's five reports were moved to MiniLM vectors without losing facts/reviews/notes.
+4. Final verification/documentation — API collection, setup/research guide, screenshots, real model/worker checks, migration and browser regression checks. See VERIFICATION.md for final observed results rather than treating implementation as an independently validated research claim.

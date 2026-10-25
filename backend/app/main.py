@@ -436,6 +436,7 @@ def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db))
     fact.verified, fact.review_note = review.verified, review.note
     if review.revision:
         fact.revision = review.revision
+    db.commit()
     return {"id": fact.id, "verified": fact.verified}
 
 
@@ -450,7 +451,9 @@ def search(request: SearchRequest, db: Session = Depends(get_db)):
 def question(request: SearchRequest, db: Session = Depends(get_db)):
     """Answer from scoped source evidence, or return an explicit abstention. Simple report-overview requests use saved metadata. Optional remote generation validates citation IDs and literal quotes; numerical comparisons use Decimal arithmetic."""
     verify_demo_facts(db)
-    return answer(db, request)
+    response = answer(db, request)
+    db.commit()
+    return response
 
 
 @app.post("/api/compare", response_model=ActionResponse, tags=["Facts"])

@@ -2,7 +2,7 @@
 
 **Indian Financial Filings Intelligence** — a portfolio application for asking evidence-backed questions, inspecting source pages and comparing reviewed financial metrics.
 
-FastAPI · React + TypeScript · PostgreSQL full-text search · pgvector · PDF worker · Docker Compose
+FastAPI · React + TypeScript · PostgreSQL full-text search · pgvector · MiniLM / FinBERT · PDF worker · Docker Compose
 
 > **The included TCS and Infosys PDFs are synthetic.** Every figure and management statement in them is invented for software testing. No real issuer PDFs are redistributed. Offline answers are verbatim extracts, not generated financial analysis.
 
@@ -11,7 +11,7 @@ FastAPI · React + TypeScript · PostgreSQL full-text search · pgvector · PDF 
 Start Docker Desktop, then run from this folder:
 
 ```powershell
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up -d --build
 ```
 
@@ -35,9 +35,13 @@ If `.env` already exists, retain your values. The defaults work without copying 
 - Simple prompts such as **What is this?** identify the selected report, dates and page count, with an opening-page link. Vague prompts ask for clarification; follow-up buttons help you choose a specific question. These local overviews use saved metadata and actual source pages, without model credentials.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
 - Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
-- Three straightforward tabs: **Ask a question**, **My reports**, and **Compare numbers**. Larger text, clear status messages, source buttons, mobile navigation and keyboard-accessible dialogs.
+- Simple question/report/comparison screens plus a checked-financial **Dashboard** and source-linked **Knowledge graph**. Dark mode, mobile bottom navigation and keyboard-accessible dialogs.
 - A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
-- 50 backend tests, thirteen browser checks, fixed evaluation labels/results and GitHub Actions configuration.
+- Local sentence-transformer embeddings, optional Gemini conversations, token-bounded FinBERT commentary tone, spaCy financial entities, PDF quote highlights and saved notes.
+- Optional JWT accounts and per-owner access, live worker notifications over WebSockets, and PDF/Excel/CSV/Markdown exports.
+- Expanded automated tests, 30-question model comparisons, fixed evaluation artifacts and GitHub Actions configuration. [Upgrade/setup guide](docs/UPGRADE_GUIDE.md).
+
+For the complete local model setup, Gemini credentials, optional accounts and research limitations, use the [upgrade guide](docs/UPGRADE_GUIDE.md). The light default remains key-free; the ML profile installs CPU model packages and caches downloaded weights.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 
@@ -52,6 +56,10 @@ The app accepts additional companies and reporting periods through metadata with
 Full [demo walkthrough](docs/DEMO.md) · [architecture and tradeoffs](docs/ARCHITECTURE.md) · [API guide](docs/API.md) · [source provenance](docs/PROVENANCE.md).
 
 ## Evaluation: actual runs, including failures
+
+The upgrade evaluation adds **270 actual runs** on an isolated synthetic SQLite corpus: 30 questions × 3 retrieval modes × hash, MiniLM and experimental FinBERT mean pooling. MRR/NDCG/MAP, ROUGE, measured BERTScore, numerical checks, citation metrics, abstention confusion counts, latency percentiles and bootstrap tests are recorded in [FULL_REPORT.md](evaluation/FULL_REPORT.md). MiniLM vector MRR@6 was 0.938 versus 0.905 for hash; FinBERT was 0.881. This small regression set does not establish general superiority. [Embedding comparison](evaluation/EMBEDDING_REPORT.md). A private real annual report was checked separately for model inference and source workflow.
+
+The original PostgreSQL baseline is retained below for comparison; its figures are historical, not the new run.
 
 The checked-in run contains **48 question runs**: 6 development + 10 initial held-out questions, each tested with all 3 retrieval modes on the same four synthetic PDFs. PostgreSQL, local 256-dimensional hash embeddings, extractive answers, k=6. The interface uses k=8 for exploratory research.
 
@@ -142,11 +150,19 @@ Changing embedding provider/model/dimensions requires reindexing through `POST /
 ## Limitations and deployment boundary
 
 - Unsupported questions with overlapping vocabulary can return related historical excerpts. This is a documented answerability failure, even when citation and quote checks pass. Always inspect sources.
-- Local hash embeddings are a lexical baseline, not a trained semantic model. No OCR, multilingual quality guarantee or arbitrary-table fact extraction is included.
+- The lightweight default hash embeddings remain a lexical baseline; the optional ML profile provides real local MiniLM and FinBERT models. No OCR, multilingual quality guarantee or arbitrary-table fact extraction is included.
 - Real uploads are not automatically trusted. Recognised candidates require review, and many real tables produce no metric candidates at all. Adjusted figures and mixed revisions need manual reconciliation; currency FX conversion is not implemented.
 - The benchmark corpus is synthetic. One user-uploaded 360-page annual report was also successfully indexed and checked for source-linked extractive answers; this is a workflow check, not a real-filings accuracy benchmark. Automated downloads of the manifest PDFs returned HTTP 403; see [record](docs/real-extraction-check.json). Official URLs and manual retrieval instructions are in the [manifest](sources/official-manifest.json).
-- This localhost demo has no login, tenant isolation, role-based fact approval, public rate limiter or production migration system. It is not ready for public financial-data use. The PDFs are untrusted data; stronger worker resource/process isolation is needed for hostile uploads at scale.
+- JWT accounts, tenant scoping and role checks are available when a secret is configured. This remains a local research deployment: it needs HTTPS, distributed rate limiting, password recovery/revocation, controlled production migrations and stronger process isolation before public financial-data use.
 - The queue uses a 15-minute lease, refreshed at extraction-progress checkpoints. Run one worker for this demo; indexing stages exceeding the lease and multiple workers still need stronger ownership/renewal controls.
-- Future work: independently reviewed real corpus, stronger answerability, semantic embedding benchmarks, OCR, robust table schemas, production authentication/migrations and operational load tests. These are not completed capabilities.
+- Future work: independently reviewed real-corpus labels, semantic claim-faithfulness assessment, stronger answerability, OCR, robust table schemas and production operational/load controls. Gemini live responses still need an API key; its integration tests use controlled responses.
 
-Built in six Git milestones with simple English commit messages. [Stages](docs/MILESTONES.md) · [Resume bullets based on observed work](docs/RESUME_BULLETS.md).
+Built in six initial Git milestones and staged research upgrades, with simple English commit messages. [Stages](docs/MILESTONES.md) · [Resume bullets based on observed work](docs/RESUME_BULLETS.md).
+
+## Screenshots
+
+Dashboard using the clearly labelled made-up sample reports:
+
+![Checked sample dashboard](docs/screenshots/dashboard.png)
+
+[Question screen](docs/screenshots/research-desk.png) · [Dark mobile view](docs/screenshots/dark-mobile.png) · [Upload form](docs/screenshots/upload-simple.png)

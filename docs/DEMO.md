@@ -10,3 +10,15 @@
 8. **More search options** holds report-type, publication-cutoff and retrieval settings. **How answers work** in the footer explains the method and recorded evaluation. These options are available without crowding the main workflow.
 
 For real documents, use the [official manifest](../sources/official-manifest.json). Automated download checks returned HTTP 403 for the attempted official PDFs. Download through the issuer's normal website and upload manually. Real-disclosure answer quality and live paid providers remain unverified.
+
+## Upgrade demonstration
+
+1. Select Sample reports, then Dashboard. Show checked revenue/margin series and the relative company comparison. State that the numbers are invented; changing Company updates the charts.
+2. Return to Ask a question, choose Conversation mode, ask what affected operating margin, then ask why it changed. Open a citation from either turn.
+3. In the reader, choose View PDF, inspect the highlighted quotation, browse nearby pages and use fit/zoom. Select a short source passage, add a note, then open it from Notes. These annotations do not alter the original PDF.
+4. Use Export to download a PDF or Excel analysis. Show the checked facts, formulas and source references. An individual reply also has Save answer.
+5. For an uploaded real report, ask “What is this report?”, then a specific business-model question. Open its cited pages. Charts may be empty if no real figures were reviewed; explain why this is preferable to plotting unchecked numbers.
+6. With local models enabled, open Sentiment for identified management-commentary pages and Knowledge graph for source-linked entity mentions. Tone scores are model estimates. Graph edges mean sentence co-occurrence, not proven business relationships.
+7. Show evaluation/FULL_REPORT.md: 270 actual regression runs, explicit metrics, bootstrap intervals, remaining abstention failures and the synthetic-corpus limitation. FinBERT was not assumed to outperform the hash baseline.
+8. If a Gemini API key is configured, demonstrate a generated cited answer. Otherwise state that the adapter/validation/retry path is tested with controlled responses; do not present extractive answers as live Gemini reasoning.
+9. Accounts are enabled only when a JWT secret is configured. The initial administrator should be registered by the owner, rather than pre-created during the demo setup.

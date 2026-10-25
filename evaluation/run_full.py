@@ -171,33 +171,6 @@ def main(embedding_only=False):
     (results / f"{name}.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8"
     )
-    lines = [
-        "# Embedding comparison" if embedding_only else "# Full evaluation",
-        "",
-        report["corpus"],
-        "",
-        report["limitations"],
-        "",
-        "| Provider | Mode | MRR@6 | NDCG@6 | Recall@6 | Abstention accuracy |",
-        "|---|---|---:|---:|---:|---:|",
-    ]
-    for s in report["summaries"]:
-        lines.append(
-            f"| {s['provider']} | {s['mode']} | {s['mrr']:.3f} | {s['ndcg']:.3f} | {s['recall']:.3f} | {s['abstention_correct']:.3f} |"
-        )
-    lines.extend(
-        [
-            "",
-            "Skipped or unavailable: " + json.dumps(report["skipped"]),
-            "",
-            "Raw JSON includes per-question results, numerical exact match, ROUGE, citation precision/recall, quote support, latency percentiles, confusion counts, and paired bootstrap intervals. Semantic faithfulness needs independent human annotation and is unmeasured.",
-        ]
-    )
-    (
-        ROOT
-        / "evaluation"
-        / ("EMBEDDING_REPORT.md" if embedding_only else "FULL_REPORT.md")
-    ).write_text("\n".join(lines), encoding="utf-8")
     try:
         import matplotlib
 
@@ -223,6 +196,9 @@ def main(embedding_only=False):
     except ImportError:
         pass
     print(json.dumps({"runs": len(report["rows"]), "skipped": report["skipped"]}))
+    from render_report import write_report
+
+    write_report(report, embedding_only)
 
 
 if __name__ == "__main__":

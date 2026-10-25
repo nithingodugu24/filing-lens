@@ -55,3 +55,14 @@ def test_auth_and_tenant_isolation(client, corpus, monkeypatch):
     user.role = "viewer"
     corpus.commit()
     assert client.post(f"/api/documents/{doc_id}/retry", json={}, headers=headers).status_code == 403
+    from uuid import uuid4
+
+    assert (
+        client.post(
+            "/api/conversations",
+            json={"session_id": str(uuid4()), "question": "What is this report?"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    assert client.post("/api/auth/refresh", json={}, headers=headers).status_code == 200

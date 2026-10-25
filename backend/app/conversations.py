@@ -79,6 +79,7 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
             user_id=db.info.get("user_id"),
         )
     )
+    db.commit()
     return response
 
 

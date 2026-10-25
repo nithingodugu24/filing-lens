@@ -99,8 +99,20 @@ def sentiment_result(document_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/api/documents/{document_id}/entities", response_model=list[dict])
-def entity_list(document_id: str, db: Session = Depends(get_db), page_index: int | None = None):
+def entity_list(
+    document_id: str,
+    db: Session = Depends(get_db),
+    page_index: int | None = None,
+    entity_id: str | None = None,
+    mention_offset: int = 0,
+    mention_limit: int = 200,
+):
     document_or_404(db, document_id)
+    if not 0 <= mention_offset <= 1000000 or not 1 <= mention_limit <= 1000:
+        raise HTTPException(422, "Invalid mention offset or limit")
+    statement = select(Entity).where(Entity.document_id == document_id).order_by(Entity.count.desc())
+    if entity_id:
+        statement = statement.where(Entity.id == entity_id)
     return [
         {
             "id": e.id,
@@ -110,11 +122,9 @@ def entity_list(document_id: str, db: Session = Depends(get_db), page_index: int
             "count": e.count,
             "mentions": [
                 m for m in e.details["mentions"] if page_index is None or m["page_index"] == page_index
-            ][:200],
+            ][mention_offset : mention_offset + mention_limit],
         }
-        for e in db.scalars(
-            select(Entity).where(Entity.document_id == document_id).order_by(Entity.count.desc())
-        )
+        for e in db.scalars(statement)
         if page_index is None or any(m["page_index"] == page_index for m in e.details["mentions"])
     ]
 

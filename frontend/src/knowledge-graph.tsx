@@ -218,6 +218,7 @@ export function KnowledgeGraph({
               </button>
             </div>
           ))}
+          {selected.mentions.length<selected.count&&<button className="text-button" onClick={async()=>{try{const rows=await api<Entity[]>(`/documents/${doc.id}/entities?entity_id=${selected.id}&mention_offset=${selected.mentions.length}`);if(rows[0])setSelected({...selected,mentions:[...selected.mentions,...rows[0].mentions]})}catch(e){setError((e as Error).message)}}}>Load more mentions ({selected.mentions.length} of {selected.count} shown)</button>}
         </article>
       )}
     </section>

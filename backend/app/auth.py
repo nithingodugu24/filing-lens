@@ -86,7 +86,18 @@ def authenticate_request(db, request):
     if request.url.path == "/api/demo" and user.role != "admin":
         raise HTTPException(403, "Only the administrator can load sample reports.")
     if request.method in {"POST", "PATCH", "DELETE", "PUT"} and user.role == "viewer":
-        read_actions = {"/api/search", "/api/questions", "/api/compare", "/api/export/report"}
+        read_actions = {
+            "/api/search",
+            "/api/questions",
+            "/api/compare",
+            "/api/export/report",
+            "/api/conversations",
+            "/api/auth/refresh",
+        }
+        if "/annotations" in request.url.path or request.url.path.endswith(
+            ("/analyze-sentiment", "/extract-entities")
+        ):
+            return
         if request.url.path not in read_actions:
             raise HTTPException(403, "An analyst or administrator account is needed for this action.")
 

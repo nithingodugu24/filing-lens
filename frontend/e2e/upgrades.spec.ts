@@ -58,6 +58,7 @@ test("source highlighting, PDF navigation and saved note work together", async (
   page,
 }) => {
   await samples(page);
+  const noteText = `Browser test note ${Date.now()}`;
   await page.getByLabel("Company filter", { exact: true }).selectOption("TCS");
   await page.getByLabel("Period filter").selectOption("2025-09-30");
   // Use the labelled question box, independent of example-chip wording.
@@ -97,11 +98,11 @@ test("source highlighting, PDF navigation and saved note work together", async (
     .click();
   await reader
     .getByLabel("Your note")
-    .fill("Browser test note - remove after checking");
+    .fill(noteText);
   await reader.getByRole("button", { name: "Save note", exact: true }).click();
   const note = reader
     .locator(".note-card")
-    .filter({ hasText: "Browser test note - remove after checking" });
+    .filter({ hasText: noteText });
   await expect(note).toBeVisible();
   await note.getByRole("button", { name: "Delete note", exact: true }).click();
   await expect(note).not.toBeVisible();

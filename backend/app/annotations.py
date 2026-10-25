@@ -37,6 +37,7 @@ def create_note(document_id: str, data: NoteRequest, db: Session = Depends(get_d
     note = Annotation(document_id=document_id, user_id=db.info.get("user_id"), **data.model_dump())
     db.add(note)
     db.flush()
+    db.commit()
     return note_json(note)
 
 
@@ -60,4 +61,5 @@ def delete_note(annotation_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Note not found")
     document_or_404(db, note.document_id)
     db.delete(note)
+    db.commit()
     return {"deleted": True}

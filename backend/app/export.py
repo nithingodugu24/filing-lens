@@ -104,6 +104,8 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         for f in facts
     ] or ["No checked metrics in the selected documents."]
     lines += ["", "## Q&A Results", ""]
+    if not questions_asked:
+        lines.append("No Q&A history selected.")
     for run in questions_asked:
         lines += [f"### {run.question}", "", run.response.get("summary", "")]
         if run.response.get("abstained"):
@@ -230,15 +232,66 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         return export_facts_csv(facts)
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Image,
+        Table,
+        TableStyle,
+        CondPageBreak,
+    )
 
     output = io.BytesIO()
     styles = getSampleStyleSheet()
+    styles["Title"].textColor = colors.HexColor("#14634b")
+    styles["Normal"].spaceAfter = 6
+    styles["Normal"].leading = 14
     story = []
+    source_numbers = {d.id: str(i + 1) for i, d in enumerate(documents)}
+    table = None
+    if facts:
+        rows = [["Company", "Metric", "Figure", "Period end", "Basis", "Source"]]
+        for f in facts:
+            amount = (
+                f"{f['value']}%" if f["units"] == "percent" else f"{f['value']} {f['currency']} {f['units']}"
+            )
+            values = [
+                f["company"],
+                f["metric"].replace("_", " "),
+                amount,
+                f["period_end"],
+                f["basis"],
+                f"[{source_numbers[f['document_id']]}] p. {f['page']}",
+            ]
+            rows.append([Paragraph(escape(str(value)), styles["Normal"]) for value in values])
+        table = Table(rows, colWidths=[62, 87, 94, 82, 85, 60], repeatRows=1, hAlign="LEFT")
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#14634b")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0f6f3")]),
+                    ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dce3eb")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 7),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ]
+            )
+        )
+    in_metrics = False
     for line in lines:
+        if line == "## Key Metrics":
+            in_metrics = True
+        elif line.startswith("## "):
+            in_metrics = False
+        if in_metrics and line.startswith("- "):
+            continue
         if not line:
             story.append(Spacer(1, 8))
         else:
+            if line.startswith("## "):
+                story.append(CondPageBreak(100))
             style = (
                 "Title"
                 if line.startswith("# ")
@@ -248,31 +301,16 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
                 if line.startswith("### ")
                 else "Normal"
             )
-            story.append(
-                Paragraph(escape(line.lstrip("# ").replace("₹", "INR ").replace("—", "-")), styles[style])
-            )
-    if facts:
-        table = Table(
-            [["Company", "Metric", "Value", "Currency / unit", "Page"]]
-            + [
-                [Paragraph(escape(str(f[k])), styles["Normal"]) for k in ["company", "metric", "value"]]
-                + [f"{f['currency']} {f['units']}", str(f["page"])]
-                for f in facts
-            ],
-            colWidths=[80, 120, 80, 150, 40],
-            repeatRows=1,
-        )
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#14634b")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("GRID", (0, 0), (-1, -1), 0.3, colors.lightgrey),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ]
-            )
-        )
-        story += [Spacer(1, 16), table]
+            text = line.lstrip("# ").replace("₹", "INR ").replace("—", "-")
+            for doc in documents:
+                text = text.replace(doc.id, f"[{source_numbers[doc.id]}]")
+            text = text.replace(generated, datetime.fromisoformat(generated).strftime("%d %b %Y, %H:%M UTC"))
+            text = escape(text)
+            if text.startswith("**") and text.endswith("**"):
+                text = "<b>" + text[2:-2] + "</b>"
+            story.append(Paragraph(text, styles[style]))
+            if line == "## Key Metrics" and table is not None:
+                story.extend([Spacer(1, 8), table, Spacer(1, 12)])
     revenue = [f for f in facts if f["metric"] == "revenue"]
     if revenue:
         import matplotlib
