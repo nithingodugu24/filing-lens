@@ -17,6 +17,7 @@ from .models import (
     now,
 )
 from .providers import ProviderError
+from .schemas import TaskResponse
 
 router = APIRouter(tags=["Analysis"])
 
@@ -44,7 +45,7 @@ def enqueue_analysis(db, document_id, kind):
     return task
 
 
-@router.post("/api/documents/{document_id}/analyze-sentiment", status_code=202)
+@router.post("/api/documents/{document_id}/analyze-sentiment", status_code=202, response_model=TaskResponse)
 def queue_sentiment(document_id: str, db: Session = Depends(get_db)):
     doc = document_or_404(db, document_id)
     if doc.status != "indexed":
@@ -58,7 +59,7 @@ def queue_sentiment(document_id: str, db: Session = Depends(get_db)):
     return {"id": task.id, "status": task.status}
 
 
-@router.post("/api/documents/{document_id}/extract-entities", status_code=202)
+@router.post("/api/documents/{document_id}/extract-entities", status_code=202, response_model=TaskResponse)
 def queue_entities(document_id: str, db: Session = Depends(get_db)):
     doc = document_or_404(db, document_id)
     if doc.status != "indexed":
@@ -73,7 +74,7 @@ def queue_entities(document_id: str, db: Session = Depends(get_db)):
     return {"id": task.id, "status": task.status}
 
 
-@router.get("/api/documents/{document_id}/sentiment")
+@router.get("/api/documents/{document_id}/sentiment", response_model=dict)
 def sentiment_result(document_id: str, db: Session = Depends(get_db)):
     document_or_404(db, document_id)
     result = db.scalar(select(SentimentResult).where(SentimentResult.document_id == document_id))
@@ -97,8 +98,8 @@ def sentiment_result(document_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/documents/{document_id}/entities")
-def entity_list(document_id: str, db: Session = Depends(get_db)):
+@router.get("/api/documents/{document_id}/entities", response_model=list[dict])
+def entity_list(document_id: str, db: Session = Depends(get_db), page_index: int | None = None):
     document_or_404(db, document_id)
     return [
         {
@@ -107,15 +108,18 @@ def entity_list(document_id: str, db: Session = Depends(get_db)):
             "text": e.text,
             "page_index": e.page_index,
             "count": e.count,
-            "mentions": e.details["mentions"],
+            "mentions": [
+                m for m in e.details["mentions"] if page_index is None or m["page_index"] == page_index
+            ][:200],
         }
         for e in db.scalars(
             select(Entity).where(Entity.document_id == document_id).order_by(Entity.count.desc())
         )
+        if page_index is None or any(m["page_index"] == page_index for m in e.details["mentions"])
     ]
 
 
-@router.get("/api/documents/{document_id}/knowledge-graph")
+@router.get("/api/documents/{document_id}/knowledge-graph", response_model=dict)
 def knowledge_graph(document_id: str, db: Session = Depends(get_db)):
     nodes = entity_list(document_id, db)
     edges = [
@@ -137,7 +141,7 @@ def knowledge_graph(document_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/sentiment", tags=["Analytics"])
+@router.get("/api/sentiment", tags=["Analytics"], response_model=list[dict])
 def sentiment_timeline(synthetic: bool | None = None, db: Session = Depends(get_db)):
     return [
         {

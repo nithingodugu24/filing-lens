@@ -12,6 +12,10 @@ import {
   MessageSquare,
   Upload,
   X,
+  Download,
+  Moon,
+  Sun,
+  Network,
 } from "lucide-react";
 import {
   api,
@@ -27,14 +31,31 @@ import {
   CalculationCard,
   CompareView,
   DocumentTable,
-  EvidencePanel,
   FactReviewList,
   MethodView,
   UploadModal,
 } from "./components";
 import "./style.css";
+import { Conversation, Confidence } from "./conversation";
+import { AuthProvider, useAuth } from "./auth";
+import { ExportModal, downloadReport } from "./export";
+import { connectStatus } from "./websocket";
 
-type View = "ask" | "reports" | "compare" | "help";
+const Dashboard = React.lazy(() =>
+  import("./dashboard").then((module) => ({ default: module.Dashboard })),
+);
+const KnowledgeGraph = React.lazy(() =>
+  import("./knowledge-graph").then((module) => ({
+    default: module.KnowledgeGraph,
+  })),
+);
+const EvidencePanel = React.lazy(() =>
+  import("./evidence-panel").then((module) => ({
+    default: module.EvidencePanel,
+  })),
+);
+
+type View = "ask" | "reports" | "compare" | "dashboard" | "graph" | "help";
 type ReportSet = "uploaded" | "samples";
 const questions = [
   "Compare revenue growth for TCS and Infosys.",
@@ -43,6 +64,18 @@ const questions = [
 ];
 
 function App() {
+  const { user, logout } = useAuth();
+  const [exportOpen, setExportOpen] = useState(false),
+    [connected, setConnected] = useState(false);
+  const [theme, setTheme] = useState(
+    () =>
+      localStorage.getItem("filinglens-theme") ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+  );
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("filinglens-theme", theme);
+  }, [theme]);
   const [view, setView] = useState<View>("ask"),
     [docs, setDocs] = useState<Document[]>([]),
     [facts, setFacts] = useState<Fact[]>([]),
@@ -63,6 +96,7 @@ function App() {
     [asked, setAsked] = useState(""),
     [answer, setAnswer] = useState<Answer | null>(null);
   const questionInput = useRef<HTMLTextAreaElement>(null);
+  const [conversationMode, setConversationMode] = useState(false);
   const refresh = useCallback(async () => {
     try {
       const [d, f, r] = await Promise.all([
@@ -82,18 +116,56 @@ function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  const processing = docs.some(
-    (d) => d.status === "queued" || d.status === "processing",
+  useEffect(
+    () =>
+      connectStatus((event) => {
+        if (event.type === "connected") {
+          void refresh();
+          return;
+        }
+        if (event.document_id) {
+          setDocs((current) =>
+            current.map((d) =>
+              d.id === event.document_id
+                ? {
+                    ...d,
+                    status: event.status ?? d.status,
+                    warning:
+                      event.progress === undefined ? d.warning : event.progress,
+                    page_count: event.page_count ?? d.page_count,
+                  }
+                : d,
+            ),
+          );
+          if (event.type === "job_complete") {
+            setNotice("Your report is ready. You can now ask questions.");
+            void refresh();
+          } else if (event.status === "failed") {
+            setNotice("A report needs attention. Open My reports for details.");
+            void refresh();
+          }
+        }
+      }, setConnected),
+    [refresh],
   );
   useEffect(() => {
-    const timer = setInterval(
-      () => {
-        if (document.visibilityState === "visible") void refresh();
-      },
-      processing ? 3000 : 30000,
-    );
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 60000);
     return () => clearInterval(timer);
-  }, [processing, refresh]);
+  }, [refresh]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    if (questionInput.current) {
+      questionInput.current.style.height = "auto";
+      questionInput.current.style.height =
+        Math.min(160, Math.max(100, questionInput.current.scrollHeight)) + "px";
+    }
+  }, [question]);
   useEffect(() => {
     setAnswer(null);
     setAsked("");
@@ -209,6 +281,38 @@ function App() {
           FilingLens
         </a>
         <span className="brand-description">Understand company reports</span>
+        <span
+          className={`connection-dot ${connected ? "online" : "offline"}`}
+          title={
+            connected
+              ? "Live updates connected"
+              : "Reconnecting to live updates"
+          }
+          aria-label={
+            connected ? "Live updates connected" : "Live updates disconnected"
+          }
+        />
+        <button
+          className="icon-button"
+          aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
+          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+        >
+          {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
+        </button>
+        <button
+          className="button secondary header-export"
+          onClick={() => setExportOpen(true)}
+        >
+          <Download size={17} />
+          <span>Export</span>
+        </button>
+        {user && (
+          <details className="user-menu">
+            <summary>{user.full_name}</summary>
+            <small>{user.role}</small>
+            <button onClick={logout}>Sign out</button>
+          </details>
+        )}
         <button className="button primary" onClick={() => setUpload(true)}>
           <Upload size={18} />
           Upload report
@@ -225,20 +329,55 @@ function App() {
                 label: "Compare numbers",
                 icon: ChartNoAxesCombined,
               },
+              {
+                id: "dashboard",
+                label: "Dashboard",
+                icon: ChartNoAxesCombined,
+              },
+              { id: "graph", label: "Knowledge graph", icon: Network },
             ] as const
           ).map((item) => (
             <button
               key={item.id}
+              aria-label={item.label}
               aria-current={view === item.id ? "page" : undefined}
               className={view === item.id ? "selected" : ""}
               onClick={() => navigate(item.id)}
             >
               <item.icon size={18} />
-              {item.label}
+              <span className="nav-label">{item.label}</span>
+              <span className="nav-short">
+                {
+                  {
+                    ask: "Ask",
+                    reports: "Reports",
+                    compare: "Compare",
+                    dashboard: "Charts",
+                    graph: "Names",
+                  }[item.id]
+                }
+              </span>
             </button>
           ))}
         </nav>
         <main>
+          <div className="breadcrumb">
+            <button onClick={() => navigate("ask")}>Home</button>
+            <span>›</span>
+            <span>
+              {
+                {
+                  ask: "Ask a question",
+                  reports: "My reports",
+                  compare: "Compare numbers",
+                  dashboard: "Dashboard",
+                  graph: "Knowledge graph",
+                  help: "Help",
+                }[view]
+              }
+            </span>
+            {upload && <span>› Upload report</span>}
+          </div>
           <div className="page-heading">
             <h1>
               {view === "ask"
@@ -247,7 +386,11 @@ function App() {
                   ? "Your reports"
                   : view === "compare"
                     ? "Compare financial numbers"
-                    : "How FilingLens works"}
+                    : view === "dashboard"
+                      ? "Financial dashboard"
+                      : view === "graph"
+                        ? "Names and figures in your reports"
+                        : "How FilingLens works"}
             </h1>
             <p>
               {view === "ask"
@@ -256,7 +399,11 @@ function App() {
                   ? "Upload a PDF and wait until it says “Ready”. Then you can ask questions about it."
                   : view === "compare"
                     ? "Choose two checked figures to see the change and how it was calculated."
-                    : "Answers come from the reports you select. You can open the source for every result."}
+                    : view === "dashboard"
+                      ? "See trends from checked figures in your reports."
+                      : view === "graph"
+                        ? "Explore names, dates and figures mentioned together, then check the source."
+                        : "Answers come from the reports you select. You can open the source for every result."}
             </p>
           </div>
           {error && (
@@ -281,8 +428,7 @@ function App() {
             </div>
           )}
           {loading ? (
-            <div className="empty-state" role="status">
-              <LoaderCircle className="spin" />
+            <div className="skeleton" role="status">
               Loading reports…
             </div>
           ) : (
@@ -435,7 +581,50 @@ function App() {
                         </div>
                       </section>
                     )}
-                  {view === "ask" && (
+                  {view === "ask" && searchable.length > 0 && (
+                    <div
+                      className="question-mode"
+                      role="group"
+                      aria-label="Question mode"
+                    >
+                      <button
+                        className={!conversationMode ? "selected" : ""}
+                        onClick={() => setConversationMode(false)}
+                      >
+                        Single question
+                      </button>
+                      <button
+                        className={conversationMode ? "selected" : ""}
+                        onClick={() => setConversationMode(true)}
+                      >
+                        Conversation mode
+                      </button>
+                    </div>
+                  )}
+                  {view === "ask" &&
+                    conversationMode &&
+                    searchable.length > 0 && (
+                      <Conversation
+                        key={[
+                          source,
+                          company,
+                          selectedPeriod,
+                          docType,
+                          cutoff,
+                        ].join("|")}
+                        filters={{
+                          synthetic: source === "samples",
+                          companies: company === "all" ? [] : [company],
+                          period_ends:
+                            selectedPeriod === "all" ? [] : [selectedPeriod],
+                          document_types: docType === "all" ? [] : [docType],
+                          publication_cutoff: cutoff || null,
+                        }}
+                        mode={mode}
+                        onEvidence={setSelected}
+                      />
+                    )}
+                  {view === "ask" && !conversationMode && (
                     <div className="ask-layout">
                       <div className="question-and-answer">
                         <section className="question-card">
@@ -626,6 +815,25 @@ function App() {
                               </button>
                             </div>
                             <p className="asked-question">{asked}</p>
+                            <button
+                              className="text-button answer-export"
+                              onClick={() =>
+                                downloadReport(
+                                  [
+                                    ...new Set(
+                                      answer.evidence.map((e) => e.document_id),
+                                    ),
+                                  ],
+                                  "md",
+                                  true,
+                                  answer.run_id,
+                                ).catch((e) => setError(e.message))
+                              }
+                              disabled={!answer.evidence.length}
+                            >
+                              <Download size={14} /> Save answer
+                            </button>
+                            <Confidence value={answer.confidence} />
                             {answer.summary && (
                               <div className="reply-summary">
                                 <p>{answer.summary}</p>
@@ -729,7 +937,13 @@ function App() {
                                           <button
                                             className="citation"
                                             key={id}
-                                            onClick={() => setSelected(e)}
+                                            onClick={() =>
+                                              setSelected({
+                                                ...e,
+                                                highlightText:
+                                                  claim.supporting_quote,
+                                              })
+                                            }
                                           >
                                             <FileText size={16} />
                                             Open {e.company} source · page{" "}
@@ -878,6 +1092,33 @@ function App() {
                       onError={setError}
                     />
                   )}
+                  {view === "dashboard" && (
+                    <React.Suspense
+                      fallback={
+                        <div className="skeleton">Loading dashboard…</div>
+                      }
+                    >
+                      <Dashboard
+                        synthetic={source === "samples"}
+                        documentIds={filtered.map((d) => d.id)}
+                      />
+                    </React.Suspense>
+                  )}
+                  {view === "graph" && (
+                    <React.Suspense
+                      fallback={
+                        <div className="skeleton">
+                          Loading names and figures…
+                        </div>
+                      }
+                    >
+                      <KnowledgeGraph
+                        key={source}
+                        docs={filtered}
+                        onEvidence={setSelected}
+                      />
+                    </React.Suspense>
+                  )}
                 </>
               )}
               {view === "help" && <MethodView />}
@@ -896,7 +1137,21 @@ function App() {
         </footer>
       </div>
       {selected && (
-        <EvidencePanel evidence={selected} onClose={() => setSelected(null)} />
+        <React.Suspense
+          fallback={
+            <div className="panel-overlay">
+              <div className="skeleton">Opening source page…</div>
+            </div>
+          }
+        >
+          <EvidencePanel
+            evidence={selected}
+            onClose={() => setSelected(null)}
+          />
+        </React.Suspense>
+      )}
+      {exportOpen && (
+        <ExportModal docs={sourceDocs} onClose={() => setExportOpen(false)} />
       )}
       {upload && (
         <UploadModal
@@ -922,6 +1177,8 @@ function App() {
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </React.StrictMode>,
 );

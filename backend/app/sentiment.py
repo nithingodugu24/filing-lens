@@ -34,7 +34,7 @@ class SentimentAnalyzer:
 
     def analyze(self, text):
         tokenizer = self.classifier.tokenizer
-        tokens = tokenizer.encode(text, add_special_tokens=False)
+        tokens = tokenizer.encode(text, add_special_tokens=False, verbose=False)
         limit = 512 - tokenizer.num_special_tokens_to_add(pair=False)
         pieces = [tokens[start : start + limit] for start in range(0, len(tokens), limit)]
         if not pieces:

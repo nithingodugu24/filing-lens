@@ -1,10 +1,8 @@
 export { UploadModal } from "./upload";
-import { useDialog } from "./dialog";
 import React, { useEffect, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
-  BookOpen,
   ChartNoAxesCombined,
   Check,
   Clock3,
@@ -13,9 +11,7 @@ import {
   LoaderCircle,
   Search,
   ShieldCheck,
-  ExternalLink,
   AlertCircle,
-  PanelRightClose,
 } from "lucide-react";
 import {
   api,
@@ -482,138 +478,7 @@ export function FactReviewList({
     </section>
   );
 }
-export function EvidencePanel({
-  evidence: e,
-  onClose,
-}: {
-  evidence: Evidence;
-  onClose: () => void;
-}) {
-  const [page, setPage] = useState<{
-      text: string;
-      printed_label: string | null;
-      tables: { id: string; cells: string[][] }[];
-    } | null>(null),
-    [error, setError] = useState(""),
-    [pdf, setPdf] = useState(false);
-  const dialogRef = useDialog<HTMLElement>(onClose);
-  useEffect(() => {
-    setPage(null);
-    setError("");
-    api<typeof page>(`/documents/${e.document_id}/pages/${e.page_index}`)
-      .then(setPage)
-      .catch((err) => setError(err.message));
-  }, [e.document_id, e.page_index]);
-  return (
-    <div className="panel-overlay" onClick={onClose}>
-      <aside
-        ref={dialogRef}
-        className="evidence-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Evidence reader"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="panel-heading">
-          <span>
-            <BookOpen size={18} /> Source page
-          </span>
-          <button aria-label="Close evidence reader" onClick={onClose}>
-            <PanelRightClose size={21} />
-          </button>
-        </div>
-        <div className="panel-doc">
-          <span className="eyebrow">
-            {e.synthetic
-              ? "SAMPLE REPORT · MADE-UP DATA"
-              : "YOUR UPLOADED REPORT"}
-          </span>
-          <h2>{e.title}</h2>
-          <div className="page-badge">
-            PDF page {e.page_index + 1}
-            <span>
-              Printed label:{" "}
-              {page?.printed_label || e.printed_label || "not available"}
-            </span>
-          </div>
-        </div>
-        <div className="reader-tabs">
-          <button
-            className={!pdf ? "selected" : ""}
-            onClick={() => setPdf(false)}
-          >
-            Read text
-          </button>
-          <button
-            className={pdf ? "selected" : ""}
-            onClick={() => setPdf(true)}
-          >
-            View PDF
-          </button>
-          <a
-            href={`/api/documents/${e.document_id}/file#page=${e.page_index + 1}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open PDF <ExternalLink size={13} />
-          </a>
-        </div>
-        {error ? (
-          <div className="error">{error}</div>
-        ) : pdf ? (
-          <iframe
-            title={`PDF page ${e.page_index + 1}`}
-            src={`/api/documents/${e.document_id}/file#page=${e.page_index + 1}`}
-          />
-        ) : (
-          <div className="reader-content">
-            {!page ? (
-              <LoaderCircle className="spin" />
-            ) : (
-              <>
-                <div className="reader-text">{page.text}</div>
-                {page.tables.length > 0 && (
-                  <>
-                    <h3>Tables found on this page</h3>
-                    {page.tables.map((t) => (
-                      <div className="table-wrap" key={t.id}>
-                        <table className="extracted-table">
-                          <tbody>
-                            {t.cells.map((row, i) => (
-                              <tr key={i}>
-                                {row.map((cell, j) => (
-                                  <td key={j}>{cell}</td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-            {e.source_url && (
-              <a
-                className="source-link"
-                href={e.source_url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Original source <ExternalLink size={14} />
-              </a>
-            )}
-          </div>
-        )}
-        <div className="reader-footer">
-          <ShieldCheck size={15} /> PDF page numbers are 1-based here. Printed
-          labels may differ.
-        </div>
-      </aside>
-    </div>
-  );
-}
+export { EvidencePanel } from "./evidence-panel";
 export function MethodView() {
   const [evaluation, setEvaluation] = useState<{
     k: number;

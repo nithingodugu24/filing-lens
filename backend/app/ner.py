@@ -36,6 +36,10 @@ def load_ner_model():
         raise ProviderError(
             "Install the English model with: python -m spacy download en_core_web_sm"
         ) from None
+    except Exception:
+        raise ProviderError(
+            "The English model could not load. Install the pinned ML dependencies and the compatible en_core_web_sm model."
+        ) from None
 
 
 class FinancialNER:

@@ -240,7 +240,7 @@ def answer(db, request, history=None):
         "claims": claims,
         "evidence": evidence,
         "calculations": calculations,
-        "abstained": abstained and not calculations,
+        "abstained": True if confidence is not None and confidence < 0.5 else abstained and not calculations,
         "limitation": limitation,
         "configuration": configuration,
         "latency_ms": latency,

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .analysis_jobs import document_or_404
 from .db import get_db
 from .models import Annotation, Page
+from .schemas import NoteResponse
 
 router = APIRouter(tags=["Annotations"])
 
@@ -23,7 +24,7 @@ def note_json(note):
     }
 
 
-@router.post("/api/documents/{document_id}/annotations", status_code=201)
+@router.post("/api/documents/{document_id}/annotations", status_code=201, response_model=NoteResponse)
 def create_note(document_id: str, data: NoteRequest, db: Session = Depends(get_db)):
     document_or_404(db, document_id)
     page = db.scalar(select(Page).where(Page.document_id == document_id, Page.page_index == data.page_index))
@@ -39,7 +40,7 @@ def create_note(document_id: str, data: NoteRequest, db: Session = Depends(get_d
     return note_json(note)
 
 
-@router.get("/api/documents/{document_id}/annotations")
+@router.get("/api/documents/{document_id}/annotations", response_model=list[NoteResponse])
 def notes(document_id: str, db: Session = Depends(get_db)):
     document_or_404(db, document_id)
     return [
@@ -52,7 +53,7 @@ def notes(document_id: str, db: Session = Depends(get_db)):
     ]
 
 
-@router.delete("/api/annotations/{annotation_id}")
+@router.delete("/api/annotations/{annotation_id}", response_model=dict[str, bool])
 def delete_note(annotation_id: str, db: Session = Depends(get_db)):
     note = db.get(Annotation, annotation_id)
     if note is None:

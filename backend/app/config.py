@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     answer_provider: str = "extractive"
     answer_model: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.8-flash"
     sentiment_enabled: bool = False
     ner_enabled: bool = False
     jwt_secret_key: str = ""

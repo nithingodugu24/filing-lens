@@ -134,7 +134,8 @@ test("simple question, source reader and PDF page", async ({ page }) => {
     /#page=1$/,
   );
   await reader.getByRole("button", { name: "View PDF" }).click();
-  await expect(reader.locator("iframe")).toHaveAttribute("src", /#page=1$/);
+  await expect(reader.locator(".react-pdf__Page canvas")).toBeVisible();
+  await expect(reader.getByText("Page 1 / 2", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(reader).not.toBeVisible();
 });

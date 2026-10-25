@@ -8,6 +8,8 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import Response, PlainTextResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -18,7 +20,19 @@ from .db import engine, get_db, init_db
 from .demo import seed_demo, verify_demo_facts
 from .ingestion import UploadTooLarge, enqueue
 from .models import Chunk, Document, ExtractedTable, Fact, Job, Page, WorkerState
-from .schemas import CompareRequest, DocumentMetadata, FactReview, SearchRequest
+from .schemas import CompareRequest, DocumentMetadata, FactReview, SearchRequest, ActionResponse
+from .schemas import (
+    AnalyticsResponse,
+    AnswerResponse,
+    DocumentResponse,
+    ErrorResponse,
+    FactResponse,
+    HealthResponse,
+    PageResponse,
+    ReadyResponse,
+    SearchResponse,
+    UploadResponse,
+)
 from .answers import answer
 from .finance import compare_facts
 from .providers import ProviderError
@@ -46,7 +60,46 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
-    description="Evidence-first Indian financial filings intelligence. Local demo, no authentication.",
+    contact={"name": "FilingLens project maintainer"},
+    terms_of_service="/api/terms",
+    swagger_ui_parameters={"displayRequestDuration": True, "filter": True, "docExpansion": "none"},
+    description="""![FilingLens](/api/logo.svg)
+
+## FilingLens — Indian financial reports
+Upload a digital PDF, wait for **Ready**, ask a question and check the cited source page.
+
+Includes checked financial comparisons, local semantic search, optional Gemini conversations,
+management tone, entity exploration, annotations, exports and live progress.
+
+**Accounts:** authentication is optional. When JWT_SECRET_KEY is configured, register or sign in
+and use the Authorize button with your bearer token. The first account is the administrator.
+**Evidence:** PDF content is untrusted data. Literal quotation validation is not a guarantee of
+semantic correctness. Synthetic samples are labelled and are unsuitable for financial decisions.
+**Privacy:** uploaded documents stay on this server. Enabling a remote answer/embedding provider
+sends the question and/or retrieved passages to that configured provider.
+
+See docs/API.md and docs/UPGRADE_GUIDE.md in the repository for setup and reproducible examples.
+""",
+    responses={
+        code: {
+            "model": ErrorResponse,
+            "description": message,
+            "content": {
+                "application/json": {"example": {"detail": message, "request_id": "request identifier"}}
+            },
+        }
+        for code, message in {
+            401: "Sign in required",
+            403: "Your account cannot perform this action",
+            404: "Resource not found",
+            409: "The action conflicts with current report state",
+            413: "The upload is too large",
+            415: "A PDF is required",
+            422: "Invalid input",
+            429: "Too many requests",
+            503: "Database, worker or configured model is unavailable",
+        }.items()
+    },
 )
 app.add_middleware(
     CORSMiddleware,
@@ -122,6 +175,39 @@ async def invalid_value(request, error):
     )
 
 
+@app.exception_handler(HTTPException)
+async def http_error(request, error):
+    return JSONResponse(
+        {"detail": error.detail, "request_id": getattr(request.state, "request_id", None)},
+        status_code=error.status_code,
+        headers=error.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, error):
+    return JSONResponse(
+        {
+            "detail": [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in error.errors()],
+            "request_id": getattr(request.state, "request_id", None),
+        },
+        status_code=422,
+    )
+
+
+@app.get("/api/logo.svg", include_in_schema=False)
+def logo():
+    return Response(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 48"><rect width="44" height="44" x="2" y="2" rx="9" fill="#14634b"/><path d="M15 12h10l7 7v15H15z M25 12v8h7 M19 25h9 M19 29h9" fill="none" stroke="white" stroke-width="2"/><text x="57" y="32" font-family="sans-serif" font-size="27" fill="#14634b">FilingLens</text></svg>',
+        media_type="image/svg+xml",
+    )
+
+
+@app.get("/api/terms", include_in_schema=False, response_class=PlainTextResponse)
+def terms():
+    return "FilingLens is an educational research project. Upload documents you are permitted to process. Verify cited source pages and checked financial figures. Model outputs and synthetic samples are not investment advice. Enabling remote providers sends selected text to those providers."
+
+
 @app.exception_handler(ProviderError)
 async def provider_error(request, error):
     return JSONResponse(
@@ -150,8 +236,9 @@ async def database_unavailable(request, error):
     )
 
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse, tags=["Health"])
 def health():
+    """Lightweight liveness probe. Does not contact a model or require an account."""
     return {"status": "ok", "service": "FilingLens"}
 
 
@@ -160,8 +247,9 @@ def docs_redirect():
     return RedirectResponse("/api/docs")
 
 
-@app.get("/api/ready")
+@app.get("/api/ready", response_model=ReadyResponse, tags=["Health"])
 def ready(db: Session = Depends(get_db)):
+    """Check database access and recent worker heartbeat, and report configured providers and upload limits. No credentials are returned."""
     db.execute(text("SELECT 1"))
     state = db.get(WorkerState, "main")
     worker_ok = (
@@ -193,7 +281,7 @@ def document_json(db, document):
     data = {
         column.name: getattr(document, column.name)
         for column in Document.__table__.columns
-        if column.name != "path"
+        if column.name not in {"path", "user_id", "dedup_key"}
     }
     job = db.scalar(select(Job).where(Job.document_id == document.id).order_by(Job.created_at.desc()))
     data["job"] = (
@@ -202,10 +290,11 @@ def document_json(db, document):
     return data
 
 
-@app.post("/api/documents", status_code=202)
+@app.post("/api/documents", status_code=202, response_model=UploadResponse, tags=["Documents"])
 async def upload_document(
     metadata: str = Form(...), file: UploadFile = File(...), db: Session = Depends(get_db)
 ):
+    """Accept a digital PDF with a JSON metadata form field. SHA-256 deduplication is scoped to the account. Returns 202 after the queue write commits; inspect document status before asking questions."""
     try:
         parsed = DocumentMetadata.model_validate_json(metadata)
     except ValidationError:
@@ -220,29 +309,38 @@ async def upload_document(
     return {"document": document_json(db, document), "duplicate": duplicate}
 
 
-@app.get("/api/documents")
+@app.get("/api/documents", response_model=list[DocumentResponse], tags=["Documents"])
 def documents(db: Session = Depends(get_db)):
+    """List visible reports ordered by reporting period and company. Analysts see their own reports; administrators can see all. Storage paths and ownership keys are omitted."""
     return [
         document_json(db, d)
         for d in db.scalars(select(Document).order_by(Document.period_end.desc(), Document.company))
     ]
 
 
-@app.get("/api/documents/{document_id}")
+@app.get("/api/documents/{document_id}", response_model=DocumentResponse, tags=["Documents"])
 def document_detail(document_id: str, db: Session = Depends(get_db)):
+    """Return saved metadata and the latest indexing job for one visible report. An inaccessible report returns 404."""
     return document_json(db, require_document(db, document_id))
 
 
-@app.get("/api/documents/{document_id}/file")
+@app.get(
+    "/api/documents/{document_id}/file",
+    tags=["Documents"],
+    response_class=FileResponse,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
 def document_file(document_id: str, db: Session = Depends(get_db)):
+    """Stream the original source PDF inline after checking document access. PDF page anchors are one-based browser navigation, not server filters."""
     doc = require_document(db, document_id)
     return FileResponse(
         doc.path, media_type="application/pdf", filename=f"{doc.id}.pdf", content_disposition_type="inline"
     )
 
 
-@app.get("/api/documents/{document_id}/pages/{page_index}")
+@app.get("/api/documents/{document_id}/pages/{page_index}", response_model=PageResponse, tags=["Documents"])
 def document_page(document_id: str, page_index: int, db: Session = Depends(get_db)):
+    """Return extracted text, printed page label and table cells for a zero-based PDF page. A missing or not-yet-indexed page returns 404."""
     require_document(db, document_id)
     page = db.scalar(select(Page).where(Page.document_id == document_id, Page.page_index == page_index))
     if not page:
@@ -260,8 +358,11 @@ def document_page(document_id: str, page_index: int, db: Session = Depends(get_d
     }
 
 
-@app.post("/api/documents/{document_id}/retry", status_code=202)
+@app.post(
+    "/api/documents/{document_id}/retry", status_code=202, response_model=ActionResponse, tags=["Documents"]
+)
 def retry_document(document_id: str, db: Session = Depends(get_db)):
+    """Queue a failed report for another indexing attempt. Reports in any other state return 409."""
     document = require_document(db, document_id)
     if document.status != "failed":
         raise HTTPException(409, "Only failed documents can be retried.")
@@ -271,8 +372,11 @@ def retry_document(document_id: str, db: Session = Depends(get_db)):
     return {"status": "queued"}
 
 
-@app.post("/api/documents/{document_id}/reindex", status_code=202)
+@app.post(
+    "/api/documents/{document_id}/reindex", status_code=202, response_model=ActionResponse, tags=["Documents"]
+)
 def reindex_document(document_id: str, db: Session = Depends(get_db)):
+    """Re-extract and re-embed a ready or failed report. This resets extracted fact reviews. Use scripts/rebuild_embeddings.py to change only vectors and preserve reviews."""
     document = require_document(db, document_id)
     if document.status not in {"indexed", "failed"}:
         raise HTTPException(409, "Wait for the current processing job to finish.")
@@ -282,13 +386,15 @@ def reindex_document(document_id: str, db: Session = Depends(get_db)):
     return {"status": "queued", "message": document.warning}
 
 
-@app.post("/api/demo", status_code=202)
+@app.post("/api/demo", status_code=202, response_model=ActionResponse, tags=["Documents"])
 def demo(db: Session = Depends(get_db)):
+    """Queue four made-up financial PDFs, idempotently. Requires administrator role when accounts are enabled."""
     return seed_demo(db)
 
 
-@app.get("/api/facts")
+@app.get("/api/facts", response_model=list[FactResponse], tags=["Facts"])
 def facts(db: Session = Depends(get_db)):
+    """List visible financial fact candidates with checked status, basis, units, revision and source page. Only synthetic fixtures are automatically checked against their fixture specification."""
     verify_demo_facts(db)
     result = []
     for fact, doc, chunk in db.execute(
@@ -309,17 +415,20 @@ def facts(db: Session = Depends(get_db)):
     return result
 
 
-@app.get("/api/analytics", tags=["Analytics"])
-def get_analytics(synthetic: bool | None = None, db: Session = Depends(get_db)):
+@app.get("/api/analytics", response_model=AnalyticsResponse, tags=["Analytics"])
+def get_analytics(
+    synthetic: bool | None = None, document_ids: str | None = None, db: Session = Depends(get_db)
+):
     """Return checked financial series; synthetic and uploaded sources can be filtered separately."""
     from .analytics import analytics
 
     verify_demo_facts(db)
-    return analytics(db, synthetic)
+    return analytics(db, synthetic, document_ids.split(",") if document_ids is not None else None)
 
 
-@app.patch("/api/facts/{fact_id}")
+@app.patch("/api/facts/{fact_id}", response_model=ActionResponse, tags=["Facts"])
 def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db)):
+    """Record an analyst review and optional original/restated revision. A note of at least 12 characters is required. Viewing a source does not automatically verify its figures."""
     fact = db.get(Fact, fact_id)
     if not fact:
         raise HTTPException(404, "Fact not found")
@@ -330,19 +439,44 @@ def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db))
     return {"id": fact.id, "verified": fact.verified}
 
 
-@app.post("/api/search")
+@app.post("/api/search", response_model=SearchResponse, tags=["Search"])
 def search(request: SearchRequest, db: Session = Depends(get_db)):
+    """Retrieve up to k distinct source pages using keyword, vector or hybrid RRF search. All filters apply before ranking. Vector configuration must match the indexed vectors."""
     evidence, usage = retrieve(db, request)
     return {"evidence": evidence, "usage": usage, "mode": request.mode}
 
 
-@app.post("/api/questions")
+@app.post("/api/questions", response_model=AnswerResponse, tags=["Questions"])
 def question(request: SearchRequest, db: Session = Depends(get_db)):
+    """Answer from scoped source evidence, or return an explicit abstention. Simple report-overview requests use saved metadata. Optional remote generation validates citation IDs and literal quotes; numerical comparisons use Decimal arithmetic."""
     verify_demo_facts(db)
     return answer(db, request)
 
 
-@app.post("/api/compare")
+@app.post("/api/compare", response_model=ActionResponse, tags=["Facts"])
 def compare(request: CompareRequest, db: Session = Depends(get_db)):
+    """Compare two checked facts. Rejects incompatible currencies, basis, revisions, reporting durations, mixed real/sample inputs and a zero denominator. Returns the formula, converted inputs and source references."""
     verify_demo_facts(db)
     return compare_facts(db, request)
+
+
+_base_openapi = app.openapi
+
+
+def documented_openapi():
+    spec = _base_openapi()
+    spec.setdefault("components", {}).setdefault("securitySchemes", {})["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Required only when JWT_SECRET_KEY is configured. Sign in via /api/auth/login.",
+    }
+    public = {"/api/health", "/api/ready", "/api/auth/config", "/api/auth/register", "/api/auth/login"}
+    for path, operations in spec["paths"].items():
+        if path not in public:
+            for operation in operations.values():
+                operation["security"] = [{"BearerAuth": []}]
+    return spec
+
+
+app.openapi = documented_openapi

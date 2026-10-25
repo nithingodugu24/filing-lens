@@ -14,7 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest==9.1.1", "ruff==0.11.8"]
-ml = ["sentence-transformers>=5.1,<6", "torch>=2.6,<3", "transformers>=4.50,<5", "spacy>=3.8,<4"]
+ml = ["sentence-transformers>=5.1,<6", "torch>=2.6,<3", "transformers>=4.50,<5", "spacy==3.8.7", "preshed==3.0.10"]
 evaluation = ["rouge-score>=0.1.2,<0.2", "bert-score>=0.3.13,<0.4", "matplotlib>=3.10,<4"]
 
 [build-system]

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .answers import answer
 from .db import get_db
 from .models import ConversationHistory
-from .schemas import SearchRequest
+from .schemas import SearchRequest, AnswerResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
@@ -16,7 +16,7 @@ class ConversationRequest(SearchRequest):
     session_id: UUID
 
 
-@router.post("")
+@router.post("", response_model=AnswerResponse)
 def converse(request: ConversationRequest, db: Session = Depends(get_db)):
     session_id = str(request.session_id)
     # Serialise turns for a session on the primary PostgreSQL deployment.
@@ -82,7 +82,7 @@ def converse(request: ConversationRequest, db: Session = Depends(get_db)):
     return response
 
 
-@router.get("/{session_id}")
+@router.get("/{session_id}", response_model=list[dict])
 def conversation_history(session_id: UUID, db: Session = Depends(get_db)):
     return [
         {

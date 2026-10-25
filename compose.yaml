@@ -14,7 +14,10 @@ services:
       timeout: 3s
       retries: 20
   backend:
-    build: ./backend
+    build: &backend_build
+      context: ./backend
+      args:
+        INSTALL_ML: ${INSTALL_ML:-false}
     environment: &backend_env
       DATABASE_URL: postgresql+psycopg://filinglens:${POSTGRES_PASSWORD:-local-demo-password}@db:5432/filinglens
       STORAGE_DIR: /app/data/documents
@@ -27,12 +30,19 @@ services:
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-256}
       ANSWER_PROVIDER: ${ANSWER_PROVIDER:-extractive}
       ANSWER_MODEL: ${ANSWER_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      SENTIMENT_ENABLED: ${SENTIMENT_ENABLED:-false}
+      NER_ENABLED: ${NER_ENABLED:-false}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
       PROVIDER_BASE_URL: ${PROVIDER_BASE_URL:-https://api.openai.com/v1}
       INPUT_COST_PER_MILLION: ${INPUT_COST_PER_MILLION:-}
       OUTPUT_COST_PER_MILLION: ${OUTPUT_COST_PER_MILLION:-}
     ports: ["127.0.0.1:8000:8000"]
-    volumes: ["documents:/app/data"]
+    volumes: ["documents:/app/data", "model_cache:/home/app/.cache/huggingface"]
     depends_on:
       db: {condition: service_healthy}
     healthcheck:
@@ -41,10 +51,10 @@ services:
       timeout: 6s
       retries: 20
   worker:
-    build: ./backend
+    build: *backend_build
     command: ["python", "-m", "app.worker"]
     environment: *backend_env
-    volumes: ["documents:/app/data"]
+    volumes: ["documents:/app/data", "model_cache:/home/app/.cache/huggingface"]
     depends_on:
       backend: {condition: service_healthy}
   frontend:
@@ -54,3 +64,4 @@ services:
 volumes:
   postgres_data:
   documents:
+  model_cache:

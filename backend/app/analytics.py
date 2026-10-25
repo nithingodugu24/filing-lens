@@ -8,9 +8,11 @@ from sqlalchemy import select
 from .models import Document, Fact
 
 
-def analytics(db, synthetic=None):
+def analytics(db, synthetic=None, document_ids=None):
     docs = db.scalars(select(Document).where(Document.status == "indexed")).all()
     docs = [d for d in docs if synthetic is None or d.synthetic == synthetic]
+    if document_ids is not None:
+        docs = [d for d in docs if d.id in document_ids]
     by_id = {d.id: d for d in docs}
     facts = [f for f in db.scalars(select(Fact).where(Fact.verified.is_(True))) if f.document_id in by_id]
     counts = Counter(
@@ -54,7 +56,10 @@ def analytics(db, synthetic=None):
             )
             revenue.append(row)
         elif f.metric == "operating_margin" and f.units == "percent":
-            row["series"] = f"{doc.company} · {f.basis} · {f.revision} · {f.period_start}"
+            length = (f.period_end - f.period_start).days
+            row["series"] = (
+                f"{doc.company} · {f.basis} · {f.revision} · {'annual' if length > 300 else 'quarterly' if 80 <= length <= 100 else str(length) + ' days'}"
+            )
             margin.append(row)
     profiles = []
     for company in sorted({d.company for d in docs}):
@@ -67,7 +72,9 @@ def analytics(db, synthetic=None):
             and Decimal(rev[-2]["normalised_value"]) != 0
         ):
             growth = str(
-                (Decimal(rev[-1]["normalised_value"]) / Decimal(rev[-2]["normalised_value"]) - 1) * 100
+                (Decimal(rev[-1]["normalised_value"]) - Decimal(rev[-2]["normalised_value"]))
+                / abs(Decimal(rev[-2]["normalised_value"]))
+                * 100
             )
         profiles.append(
             {

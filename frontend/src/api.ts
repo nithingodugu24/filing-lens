@@ -26,6 +26,7 @@ export interface Document {
   } | null;
 }
 export interface Evidence {
+  highlightText?: string;
   id: string;
   document_id: string;
   title: string;
@@ -93,7 +94,13 @@ export interface Answer {
     citation_id: string;
   }[];
   suggestions?: string[];
-  claims: { text: string; citation_ids: string[]; kind: string }[];
+  claims: {
+    text: string;
+    citation_ids: string[];
+    kind: string;
+    supporting_quote?: string;
+  }[];
+  confidence?: number | null;
   evidence: Evidence[];
   calculations: Calculation[];
   abstained: boolean;
@@ -103,8 +110,30 @@ export interface Answer {
   configuration: Record<string, unknown>;
   usage: Record<string, unknown>;
 }
+export function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("filinglens-token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+export async function apiFetch(path: string, options?: RequestInit) {
+  const headers = new Headers(options?.headers);
+  for (const [key, value] of Object.entries(authHeaders()))
+    headers.set(key, value);
+  const r = await fetch("/api" + path, {
+    ...options,
+    headers,
+  });
+  if (
+    r.status === 401 &&
+    localStorage.getItem("filinglens-token") &&
+    !path.startsWith("/auth/")
+  ) {
+    localStorage.removeItem("filinglens-token");
+    window.dispatchEvent(new Event("filinglens-signout"));
+  }
+  return r;
+}
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const r = await fetch("/api" + path, options);
+  const r = await apiFetch(path, options);
   if (!r.ok) {
     let message = `Request failed (${r.status}). Please try again.`;
     try {

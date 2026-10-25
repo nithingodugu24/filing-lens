@@ -30,7 +30,7 @@ class ExportRequest(BaseModel):
 
 
 def safe_cell(value):
-    value = str(value or "")
+    value = str(value) if value is not None else ""
     return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
 
 
@@ -281,22 +281,40 @@ def generate_analysis_report(documents, questions_asked, facts, calculations, fo
         import matplotlib.pyplot as plt
 
         with _plot_lock:
-            fig, ax = plt.subplots(figsize=(7, 3))
-            # Separate panels avoid putting unlike currencies/units on a common axis.
-            ax.axis("off")
-            ax.text(0.02, 0.8, "Checked revenue figures", fontsize=14, color="#14634b")
-            for i, f in enumerate(revenue[:8]):
-                ax.text(
-                    0.02,
-                    0.65 - i * 0.08,
-                    f"{f['company']} {f['period_end']}: {f['value']} {f['currency']} {f['units']}",
+            from collections import defaultdict
+
+            groups = defaultdict(list)
+            for fact in revenue:
+                groups[
+                    (fact["currency"], fact["units"], fact["basis"], fact["revision"], fact["synthetic"])
+                ].append(fact)
+            fig, axes = plt.subplots(
+                min(4, len(groups)), 1, figsize=(7, 3 * min(4, len(groups))), squeeze=False
+            )
+            for ax, (key, group) in zip(axes[:, 0], list(groups.items())[:4], strict=True):
+                for company in sorted({f["company"] for f in group}):
+                    series = sorted(
+                        [f for f in group if f["company"] == company], key=lambda f: f["period_end"]
+                    )
+                    ax.plot(
+                        [f["period_end"] for f in series],
+                        [float(f["value"]) for f in series],
+                        marker="o",
+                        label=company,
+                    )
+                ax.set_title(
+                    f"Revenue: {key[0]} {key[1]} · {key[2]} · {key[3]}" + (" · synthetic" if key[4] else ""),
                     fontsize=9,
                 )
+                ax.legend()
+                ax.grid(alpha=0.2)
+                ax.tick_params(axis="x", labelsize=8)
+            fig.tight_layout()
             chart = io.BytesIO()
             fig.savefig(chart, format="png", bbox_inches="tight")
             plt.close(fig)
         chart.seek(0)
-        story.append(Image(chart, width=470, height=200))
+        story.append(Image(chart, width=470, height=min(600, 200 * min(4, len(groups)))))
     SimpleDocTemplate(output, title="FilingLens analysis", author="FilingLens").build(story)
     return output.getvalue()
 

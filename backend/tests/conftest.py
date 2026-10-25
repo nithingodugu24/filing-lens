@@ -2,12 +2,13 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db import Base, engine, init_db, session_scope
 
 
 @pytest.fixture(autouse=True)
 def isolated_database(tmp_path, monkeypatch):
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
     test_url = os.environ.get("TEST_DATABASE_URL")
     if test_url:
         from sqlalchemy.engine import make_url
@@ -18,7 +19,11 @@ def isolated_database(tmp_path, monkeypatch):
     monkeypatch.setenv("STORAGE_DIR", str(tmp_path / "documents"))
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_MODEL", "hash-v1")
+    monkeypatch.setenv("EMBEDDING_DIMENSIONS", "256")
     monkeypatch.setenv("ANSWER_PROVIDER", "extractive")
+    monkeypatch.setenv("SENTIMENT_ENABLED", "false")
+    monkeypatch.setenv("NER_ENABLED", "false")
+    monkeypatch.setenv("JWT_SECRET_KEY", "")
     get_settings.cache_clear()
     engine.cache_clear()
     if test_url:

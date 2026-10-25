@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 from .config import get_settings
 from .db import get_db
 from .models import Annotation, ConversationHistory, Document, QueryRun, User
+from .schemas import UserResponse, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 _attempts = defaultdict(deque)
@@ -70,6 +71,8 @@ def authenticate_request(db, request):
         "/api/auth/register",
         "/api/docs",
         "/api/openapi.json",
+        "/api/logo.svg",
+        "/api/terms",
         "/docs",
     }
     if request.url.path in public or request.method == "OPTIONS":
@@ -125,11 +128,14 @@ def limit_auth(request):
         queue.append(now)
 
 
-def token_response(user):
+def token_response(user, started=None):
     s = get_settings()
     if len(s.jwt_secret_key) < 32 or s.jwt_algorithm != "HS256":
         raise HTTPException(503, "Configure a JWT secret of at least 32 characters before using accounts.")
     expires = datetime.now(timezone.utc) + timedelta(minutes=s.access_token_expire_minutes)
+    started = started or datetime.now(timezone.utc).timestamp()
+    if datetime.now(timezone.utc).timestamp() - started > 8 * 60 * 60:
+        raise HTTPException(401, "Please sign in again to continue your session.")
     token = jwt.encode(
         {
             "sub": user.id,
@@ -137,6 +143,7 @@ def token_response(user):
             "iat": datetime.now(timezone.utc),
             "iss": "filinglens",
             "aud": "filinglens-ui",
+            "auth_time": started,
         },
         s.jwt_secret_key,
         algorithm="HS256",
@@ -149,12 +156,12 @@ def token_response(user):
     }
 
 
-@router.get("/config")
+@router.get("/config", response_model=dict[str, bool])
 def auth_config():
     return {"enabled": bool(get_settings().jwt_secret_key)}
 
 
-@router.post("/register", status_code=201)
+@router.post("/register", status_code=201, response_model=TokenResponse)
 def register(data: Registration, request: Request, db: Session = Depends(get_db)):
     if not get_settings().jwt_secret_key:
         raise HTTPException(409, "Accounts are disabled for this local demo.")
@@ -187,7 +194,7 @@ def register(data: Registration, request: Request, db: Session = Depends(get_db)
     return response
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(data: Credentials, request: Request, db: Session = Depends(get_db)):
     limit_auth(request)
     user = db.scalar(select(User).where(User.email == data.email.strip().lower()))
@@ -201,9 +208,22 @@ def login(data: Credentials, request: Request, db: Session = Depends(get_db)):
     return token_response(user)
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserResponse)
 def me(request: Request, db: Session = Depends(get_db)):
     user = getattr(request.state, "user", None)
     if user is None:
         raise HTTPException(401, "Accounts are disabled or you are not signed in.")
     return public_user(user)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_token(request: Request, db: Session = Depends(get_db)):
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(401, "Please sign in again.")
+    token = request.headers.get("authorization", "").split(" ", 1)[-1]
+    s = get_settings()
+    claims = jwt.decode(
+        token, s.jwt_secret_key, algorithms=["HS256"], issuer="filinglens", audience="filinglens-ui"
+    )
+    return token_response(user, claims.get("auth_time", claims["iat"]))
