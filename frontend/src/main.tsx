@@ -15,7 +15,6 @@ import {
   Download,
   Moon,
   Sun,
-  Network,
 } from "lucide-react";
 import {
   api,
@@ -41,22 +40,23 @@ import { AuthProvider, useAuth } from "./auth";
 import { ExportModal, downloadReport } from "./export";
 import { connectStatus } from "./websocket";
 import { MetricCard } from "./metric-card";
+import { ReportHome } from "./report-home";
+import { RecentAnswers } from "./recent-answers";
 
-const Dashboard = React.lazy(() =>
-  import("./dashboard").then((module) => ({ default: module.Dashboard })),
-);
-const KnowledgeGraph = React.lazy(() =>
-  import("./knowledge-graph").then((module) => ({
-    default: module.KnowledgeGraph,
-  })),
-);
 const EvidencePanel = React.lazy(() =>
   import("./evidence-panel").then((module) => ({
     default: module.EvidencePanel,
   })),
 );
 
-type View = "ask" | "reports" | "compare" | "dashboard" | "graph" | "help";
+type View =
+  | "home"
+  | "ask"
+  | "reports"
+  | "compare"
+  | "dashboard"
+  | "graph"
+  | "help";
 type ReportSet = "uploaded" | "samples";
 const questions = [
   "Compare revenue growth for TCS and Infosys.",
@@ -77,7 +77,14 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("filinglens-theme", theme);
   }, [theme]);
-  const [view, setView] = useState<View>("ask"),
+  const [activeReport, setActiveReport] = useState(
+    () => localStorage.getItem("filinglens-active-report") || "",
+  );
+  function chooseReport(id: string) {
+    setActiveReport(id);
+    localStorage.setItem("filinglens-active-report", id);
+  }
+  const [view, setView] = useState<View>("home"),
     [docs, setDocs] = useState<Document[]>([]),
     [facts, setFacts] = useState<Fact[]>([]),
     [ready, setReady] = useState<Partial<RuntimeInfo>>({});
@@ -170,7 +177,7 @@ function App() {
   useEffect(() => {
     setAnswer(null);
     setAsked("");
-  }, [source, company, selectedPeriod, docType, cutoff]);
+  }, [source, company, selectedPeriod, docType, cutoff, activeReport]);
   const sourceDocs = docs.filter((d) => d.synthetic === (source === "samples"));
   const companies = [...new Set(sourceDocs.map((d) => d.company))].sort();
   const periods = [...new Set(sourceDocs.map((d) => d.period_end))]
@@ -182,7 +189,8 @@ function App() {
       (selectedPeriod === "all" || d.period_end === selectedPeriod) &&
       (docType === "all" || d.document_type === docType) &&
       (!cutoff ||
-        (d.publication_date !== null && d.publication_date <= cutoff)),
+        (d.publication_date !== null && d.publication_date <= cutoff)) &&
+      (view !== "ask" || !activeReport || d.id === activeReport),
   );
   const filteredFacts = facts.filter((f) =>
     filtered.some((d) => d.id === f.document_id),
@@ -191,6 +199,7 @@ function App() {
   const sampleCount = docs.filter((d) => d.synthetic).length,
     uploadedCount = docs.length - sampleCount;
   function changeSource(value: ReportSet) {
+    chooseReport("");
     setSource(value);
     setCompany("all");
     setPeriod("all");
@@ -230,6 +239,7 @@ function App() {
           mode,
           k: 8,
           filters: {
+            document_ids: activeReport ? [activeReport] : [],
             synthetic: source === "samples",
             companies: company === "all" ? [] : [company],
             period_ends: selectedPeriod === "all" ? [] : [selectedPeriod],
@@ -264,6 +274,12 @@ function App() {
       setError((e as Error).message);
     }
   }
+  useEffect(() => {
+    if (answer)
+      document
+        .querySelector(".answer-section")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [answer]);
   const evidenceById = new Map(answer?.evidence.map((e) => [e.id, e]) || []);
   return (
     <div className="simple-app">
@@ -273,7 +289,7 @@ function App() {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            navigate("ask");
+            navigate("home");
           }}
         >
           <span className="brand-icon">
@@ -323,6 +339,7 @@ function App() {
         <nav className="main-nav" aria-label="Main navigation">
           {(
             [
+              { id: "home", label: "Report overview", icon: BookOpen },
               { id: "ask", label: "Ask a question", icon: MessageSquare },
               { id: "reports", label: "My reports", icon: FileText },
               {
@@ -330,12 +347,6 @@ function App() {
                 label: "Compare numbers",
                 icon: ChartNoAxesCombined,
               },
-              {
-                id: "dashboard",
-                label: "Dashboard",
-                icon: ChartNoAxesCombined,
-              },
-              { id: "graph", label: "Knowledge graph", icon: Network },
             ] as const
           ).map((item) => (
             <button
@@ -350,11 +361,10 @@ function App() {
               <span className="nav-short">
                 {
                   {
+                    home: "Overview",
                     ask: "Ask",
                     reports: "Reports",
                     compare: "Compare",
-                    dashboard: "Charts",
-                    graph: "Names",
                   }[item.id]
                 }
               </span>
@@ -363,11 +373,12 @@ function App() {
         </nav>
         <main>
           <div className="breadcrumb">
-            <button onClick={() => navigate("ask")}>Home</button>
+            <button onClick={() => navigate("home")}>Home</button>
             <span>›</span>
             <span>
               {
                 {
+                  home: "Report overview",
                   ask: "Ask a question",
                   reports: "My reports",
                   compare: "Compare numbers",
@@ -379,34 +390,36 @@ function App() {
             </span>
             {upload && <span>› Upload report</span>}
           </div>
-          <div className="page-heading">
-            <h1>
-              {view === "ask"
-                ? "Ask questions about company reports"
-                : view === "reports"
-                  ? "Your reports"
-                  : view === "compare"
-                    ? "Compare financial numbers"
-                    : view === "dashboard"
-                      ? "Financial dashboard"
-                      : view === "graph"
-                        ? "Names and figures in your reports"
-                        : "How FilingLens works"}
-            </h1>
-            <p>
-              {view === "ask"
-                ? "Choose your reports, ask a question, and check the source page."
-                : view === "reports"
-                  ? "Upload a PDF and wait until it says “Ready”. Then you can ask questions about it."
-                  : view === "compare"
-                    ? "Choose two checked figures to see the change and how it was calculated."
-                    : view === "dashboard"
-                      ? "See trends from checked figures in your reports."
-                      : view === "graph"
-                        ? "Explore names, dates and figures mentioned together, then check the source."
-                        : "Answers come from the reports you select. You can open the source for every result."}
-            </p>
-          </div>
+          {view !== "home" && (
+            <div className="page-heading">
+              <h1>
+                {view === "ask"
+                  ? "Ask questions about company reports"
+                  : view === "reports"
+                    ? "Your reports"
+                    : view === "compare"
+                      ? "Compare financial numbers"
+                      : view === "dashboard"
+                        ? "Financial dashboard"
+                        : view === "graph"
+                          ? "Names and figures in your reports"
+                          : "How FilingLens works"}
+              </h1>
+              <p>
+                {view === "ask"
+                  ? "Choose your reports, ask a question, and check the source page."
+                  : view === "reports"
+                    ? "Upload a PDF and wait until it says “Ready”. Then you can ask questions about it."
+                    : view === "compare"
+                      ? "Choose two checked figures to see the change and how it was calculated."
+                      : view === "dashboard"
+                        ? "See trends from checked figures in your reports."
+                        : view === "graph"
+                          ? "Explore names, dates and figures mentioned together, then check the source."
+                          : "Answers come from the reports you select. You can open the source for every result."}
+              </p>
+            </div>
+          )}
           {error && (
             <div className="error" role="alert">
               <AlertCircle size={20} />
@@ -434,7 +447,52 @@ function App() {
             </div>
           ) : (
             <>
-              {view !== "help" && (
+              {view === "home" && (
+                <ReportHome
+                  docs={docs.filter((d) => !d.synthetic)}
+                  activeId={activeReport}
+                  onChoose={chooseReport}
+                  onAsk={(q) => {
+                    setSource("uploaded");
+                    setCompany("all");
+                    setPeriod("all");
+                    setDocType("all");
+                    setCutoff("");
+                    setQuestion(q);
+                    setView("ask");
+                    setConversationMode(false);
+                  }}
+                  onEvidence={setSelected}
+                  onUpload={() => setUpload(true)}
+                  onCompare={() => {
+                    setSource("uploaded");
+                    setCompany("all");
+                    setPeriod("all");
+                    setView("compare");
+                  }}
+                  onRefresh={refresh}
+                />
+              )}
+              {view === "ask" && (
+                <label className="question-report-scope">
+                  Question scope
+                  <select
+                    aria-label="Question scope"
+                    value={activeReport}
+                    onChange={(e) => chooseReport(e.target.value)}
+                  >
+                    <option value="">All reports in the filters below</option>
+                    {sourceDocs
+                      .filter((d) => d.status === "indexed")
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {view !== "help" && view !== "home" && (
                 <>
                   <div className="report-filters">
                     <label>
@@ -448,7 +506,7 @@ function App() {
                         }
                       >
                         <option value="uploaded">
-                          My uploaded reports ({uploadedCount})
+                          Real reports ({uploadedCount})
                         </option>
                         <option value="samples">
                           Sample reports ({sampleCount})
@@ -502,7 +560,7 @@ function App() {
                   )}
                 </>
               )}
-              {!sourceDocs.length && view !== "help" ? (
+              {!sourceDocs.length && view !== "help" && view !== "home" ? (
                 <section className="getting-started">
                   <div className="welcome-icon">
                     <Upload size={28} />
@@ -565,8 +623,20 @@ function App() {
                         ? "AI answers are off. This mode shows passages from your reports."
                         : ready.answer_status === "needs_setup"
                           ? "AI answers need setup. Check the service key and selected model."
-                          : `AI answers enabled · ${ready.answer_service || "Configured AI service"}${ready.answer_model ? " · " + ready.answer_model : ""}`}
+                          : "AI answers enabled · using your selected reports"}
                     </div>
+                  )}
+                  {view === "ask" && (
+                    <RecentAnswers
+                      documentId={activeReport}
+                      latestRun={answer?.run_id}
+                      onOpen={(q, a) => {
+                        setQuestion(q);
+                        setAsked(q);
+                        setAnswer(a);
+                        setConversationMode(false);
+                      }}
+                    />
                   )}
                   {view === "ask" &&
                     filtered.length > 0 &&
@@ -624,8 +694,10 @@ function App() {
                           selectedPeriod,
                           docType,
                           cutoff,
+                          activeReport,
                         ].join("|")}
                         filters={{
+                          document_ids: activeReport ? [activeReport] : [],
                           synthetic: source === "samples",
                           companies: company === "all" ? [] : [company],
                           period_ends:
@@ -915,8 +987,20 @@ function App() {
                                       {answer.limitation}
                                     </p>
                                   )}
-                                <div className="metric-grid">{answer.metric_answers?.map(m => <MetricCard key={m.fact_id} metric={m} evidence={evidenceById.get(m.citation_id)} onEvidence={setSelected} />)}</div>
-                                {(!answer.metric_answers?.length ? answer.claims : []).map((claim, i) => (
+                                <div className="metric-grid">
+                                  {answer.metric_answers?.map((m) => (
+                                    <MetricCard
+                                      key={m.fact_id}
+                                      metric={m}
+                                      evidence={evidenceById.get(m.citation_id)}
+                                      onEvidence={setSelected}
+                                    />
+                                  ))}
+                                </div>
+                                {(!answer.metric_answers?.length
+                                  ? answer.claims
+                                  : []
+                                ).map((claim, i) => (
                                   <article className="claim" key={i}>
                                     <h3>
                                       {claim.citation_ids
@@ -1084,7 +1168,14 @@ function App() {
                       </div>
                       <DocumentTable
                         docs={filtered}
-                        onOpen={openDoc}
+                        onOpen={(d) => {
+                          if (d.synthetic) {
+                            openDoc(d);
+                            return;
+                          }
+                          chooseReport(d.id);
+                          setView("home");
+                        }}
                         onRetry={retry}
                       />
                       <p className="footnote">
@@ -1105,33 +1196,6 @@ function App() {
                       onEvidence={setSelected}
                       onError={setError}
                     />
-                  )}
-                  {view === "dashboard" && (
-                    <React.Suspense
-                      fallback={
-                        <div className="skeleton">Loading dashboard…</div>
-                      }
-                    >
-                      <Dashboard
-                        synthetic={source === "samples"}
-                        documentIds={filtered.map((d) => d.id)}
-                      />
-                    </React.Suspense>
-                  )}
-                  {view === "graph" && (
-                    <React.Suspense
-                      fallback={
-                        <div className="skeleton">
-                          Loading names and figures…
-                        </div>
-                      }
-                    >
-                      <KnowledgeGraph
-                        key={source}
-                        docs={filtered}
-                        onEvidence={setSelected}
-                      />
-                    </React.Suspense>
                   )}
                 </>
               )}
@@ -1178,7 +1242,8 @@ function App() {
             setUpload(false);
             changeSource(doc.synthetic ? "samples" : "uploaded");
             setCompany(doc.company);
-            setView("reports");
+            chooseReport(doc.id);
+            setView("home");
             setNotice(
               "Report uploaded. It is being prepared for search. This page updates automatically.",
             );

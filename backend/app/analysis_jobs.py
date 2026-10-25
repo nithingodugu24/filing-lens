@@ -14,6 +14,7 @@ from .models import (
     SentimentResult,
     StatusEvent,
     WorkerState,
+    ReportBrief,
     now,
 )
 from .providers import ProviderError
@@ -30,6 +31,14 @@ def document_or_404(db, document_id):
 
 
 def enqueue_analysis(db, document_id, kind):
+    if db.bind.dialect.name == "postgresql":
+        import hashlib
+        from sqlalchemy import text
+
+        lock = int.from_bytes(
+            hashlib.sha256(f"analysis:{document_id}:{kind}".encode()).digest()[:8], "big", signed=True
+        )
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock)"), {"lock": lock})
     existing = db.scalar(
         select(AnalysisTask).where(
             AnalysisTask.document_id == document_id,
@@ -172,18 +181,24 @@ def sentiment_timeline(synthetic: bool | None = None, db: Session = Depends(get_
     ]
 
 
-def run_analysis_one():
+def run_analysis_one(priority_only=False):
     with session_scope() as db:
         for expired in db.scalars(
             select(AnalysisTask).where(AnalysisTask.status == "processing", AnalysisTask.lease_until < now())
         ):
             expired.status, expired.error = "failed", "Analysis worker stopped. Request analysis again."
+            if expired.job_type == "brief":
+                brief = db.scalar(select(ReportBrief).where(ReportBrief.document_id == expired.document_id))
+                if brief:
+                    brief.status, brief.error = (
+                        "unavailable",
+                        "Brief preparation stopped. Try preparing the brief again.",
+                    )
+        statement = select(AnalysisTask).where(AnalysisTask.status == "queued")
+        if priority_only:
+            statement = statement.where(AnalysisTask.job_type == "brief")
         task = db.scalar(
-            select(AnalysisTask)
-            .where(AnalysisTask.status == "queued")
-            .order_by(AnalysisTask.created_at)
-            .limit(1)
-            .with_for_update(skip_locked=True)
+            statement.order_by(AnalysisTask.created_at).limit(1).with_for_update(skip_locked=True)
         )
         if task is None:
             return False
@@ -197,7 +212,11 @@ def run_analysis_one():
         task_id, document_id, kind = task.id, task.document_id, task.job_type
     try:
         with session_scope() as db:
-            if kind == "sentiment":
+            if kind == "brief":
+                from .report_workspace import prepare_brief
+
+                prepare_brief(db, document_id)
+            elif kind == "sentiment":
                 from .sentiment import analyze_document
 
                 analyze_document(db, document_id)

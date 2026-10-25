@@ -125,7 +125,7 @@ def extract_pdf(path, progress=None):
 
                 cells = financial_layout(page)
                 if cells:
-                    tables.append((index, 10000, cells))
+                    tables.append((index, 10001, cells))
             if progress and ((index + 1) % 10 == 0 or index + 1 == len(pdf)):
                 progress(index + 1, len(pdf), "reading")
         good_pages = sum(len(re.findall(r"\w", p[2])) >= 40 for p in pages)
@@ -344,6 +344,7 @@ def run_one():
             from .analysis_jobs import enqueue_analysis
 
             settings = get_settings()
+            enqueue_analysis(db, document_id, "brief")
             if settings.sentiment_enabled:
                 enqueue_analysis(db, document_id, "sentiment")
             if settings.ner_enabled:

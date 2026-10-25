@@ -44,6 +44,9 @@ from .auth import router as auth_router
 from .export import router as export_router
 from .annotations import router as annotation_router
 from .websocket import router as event_router
+from .report_workspace import router as workspace_router
+from .library import router as library_router
+from .history import router as history_router
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("filinglens")
@@ -51,6 +54,7 @@ logger = logging.getLogger("filinglens")
 
 @asynccontextmanager
 async def lifespan(app):
+    get_settings().validate_deployment()
     init_db()
     yield
 
@@ -145,6 +149,9 @@ app.include_router(auth_router)
 app.include_router(export_router)
 app.include_router(annotation_router)
 app.include_router(event_router)
+app.include_router(workspace_router)
+app.include_router(library_router)
+app.include_router(history_router)
 
 
 @app.middleware("http")
@@ -206,7 +213,7 @@ def logo():
 
 @app.get("/api/terms", include_in_schema=False, response_class=PlainTextResponse)
 def terms():
-    return "FilingLens is an educational research project. Upload documents you are permitted to process. Verify cited source pages and checked financial figures. Model outputs and synthetic samples are not investment advice. Enabling remote providers sends selected text to those providers."
+    return "FilingLens helps you read and compare company reports using source-linked figures and explanations. Upload documents you are permitted to process. Automatic checks are not an independent audit. Verify cited source pages before making decisions. Remote AI services receive the selected report passages. Prepared library reports identify their issuer sources."
 
 
 @app.exception_handler(ProviderError)

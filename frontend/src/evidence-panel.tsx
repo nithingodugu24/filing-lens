@@ -110,9 +110,7 @@ export function EvidencePanel({
         </div>
         <div className="panel-doc">
           <span className="eyebrow">
-            {e.synthetic
-              ? "SAMPLE REPORT · MADE-UP DATA"
-              : "YOUR UPLOADED REPORT"}
+            {e.synthetic ? "SAMPLE REPORT · MADE-UP DATA" : "SOURCE REPORT"}
           </span>
           <h2>{e.title}</h2>
           <div className="page-badge">

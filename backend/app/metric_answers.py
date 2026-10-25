@@ -23,6 +23,10 @@ def requested_metric(question):
         return "net_profit"
     if re.search(r"\b(?:other\s+income)\b", text):
         return "other_income"
+    if re.search(r"\bprofit\s+before\s+tax(?:es)?\b", text):
+        return "profit_before_tax"
+    if re.search(r"\b(?:income\s+tax\s+expense|tax\s+expense)\b", text):
+        return "tax_expense"
     if re.search(r"\b(?:operating\s+margin)\b", text):
         return "operating_margin"
     return None
@@ -111,7 +115,9 @@ def resolve_metric_answer(db, request):
     ):
         return None
     change_requested = bool(
-        re.search(r"\b(?:growth|change|difference|increased?|decreased?|basis points?)\b", text)
+        re.search(
+            r"\b(?:growth|grow|grew|change|difference|fall|fell|increased?|decreased?|basis points?)\b", text
+        )
     )
     allowed = filtered_statement(request.filters).with_only_columns(Document.id).distinct()
     rows = db.execute(
@@ -165,7 +171,17 @@ def resolve_metric_answer(db, request):
             ),
             None,
         )
-        units = "crore" if re.search(r"\bcrores?\b", text) and fact.units != "percent" else fact.units
+        requested_units = next(
+            (
+                unit
+                for unit in ["crore", "lakh", "million", "billion"]
+                if re.search(r"\b" + unit + r"s?\b", text)
+            ),
+            None,
+        )
+        if re.search(r"\brupees?\b", text):
+            requested_units = "unit"
+        units = requested_units if requested_units and fact.units != "percent" else fact.units
         if change_requested and prior is None:
             return None
         card = metric_card(fact, doc, chunk, prior, units)
@@ -213,4 +229,25 @@ def resolve_metric_answer(db, request):
         "limitation": "Using the latest period covered by the selected report."
         if year is None and not previous_year
         else "Reporting period and accounting basis are shown with each figure.",
+    }
+
+
+def unsupported_metric_answer(db, request):
+    """A text match is not a substitute for an unverified financial number."""
+    if not requested_metric(request.question) or re.search(
+        r"\b(?:why|drivers?|explain|forecast|predict|next|expect|estimated?|segment|region|management)\b",
+        request.question,
+        re.I,
+    ):
+        return None
+    docs = db.scalars(filtered_statement(request.filters).with_only_columns(Document).distinct()).all()
+    if not docs or any(d.synthetic for d in docs):
+        return None
+    return {
+        "claims": [],
+        "evidence": [],
+        "metric_answers": [],
+        "calculations": [],
+        "abstained": True,
+        "limitation": "I couldn't verify this figure for the requested period and accounting basis in the selected reports. Open the financial figures in the report overview, or select the report and year you need. Unrelated passages are not used as a financial answer.",
     }

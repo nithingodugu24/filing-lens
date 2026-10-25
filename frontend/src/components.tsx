@@ -252,13 +252,16 @@ export function CompareView({
               onChange={(e) => {
                 setMetric(e.target.value);
                 setOperation(
-                  e.target.value === "revenue"
+                  e.target.value !== "operating_margin"
                     ? "percentage_change"
                     : "percentage_points",
                 );
               }}
             >
               <option value="revenue">Revenue</option>
+              <option value="total_income">Total income</option>
+              <option value="net_profit">Profit for the year</option>
+              <option value="other_income">Other income</option>
               <option value="operating_margin">Operating margin</option>
             </select>
           </label>
@@ -272,7 +275,7 @@ export function CompareView({
                 setResult(null);
               }}
             >
-              {metric === "revenue" ? (
+              {metric !== "operating_margin" ? (
                 <>
                   <option value="percentage_change">
                     Percentage change (%)

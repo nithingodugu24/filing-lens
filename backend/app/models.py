@@ -68,6 +68,12 @@ class ExtractedTable(Base):
     cells: Mapped[list] = mapped_column(JSON)
 
 
+class LibraryReport(Base):
+    __tablename__ = "library_reports"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), unique=True)
+
+
 class Job(Base):
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)

@@ -191,11 +191,11 @@ def register(data: Registration, request: Request, db: Session = Depends(get_db)
         email=email,
         password_hash=bcrypt.hash(data.password),
         full_name=data.full_name.strip(),
-        role="admin" if first else "analyst",
+        role="admin" if first and get_settings().app_env != "production" else "analyst",
     )
     db.add(user)
     db.flush()
-    if first:
+    if first and get_settings().app_env != "production":
         # Existing local-demo reports become the first administrator's documents.
         from sqlalchemy import update
 

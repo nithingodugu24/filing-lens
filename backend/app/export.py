@@ -14,9 +14,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from typing import Literal
+from types import SimpleNamespace
 
 from .db import get_db
-from .models import Chunk, Document, Fact, QueryRun
+from .models import Chunk, Document, Fact, QueryRun, ReportBrief
 
 router = APIRouter(prefix="/api/export", tags=["Export"])
 _plot_lock = Lock()
@@ -380,6 +381,14 @@ def report(request: ExportRequest, db: Session = Depends(get_db)):
         if request.run_id and not runs:
             raise HTTPException(404, "This answer was not found in the selected reports")
     facts = scoped_facts(db, ids)
+    if not request.run_id:
+        saved_ids = {r.id for r in runs}
+        for brief in db.scalars(
+            select(ReportBrief).where(ReportBrief.document_id.in_(ids), ReportBrief.status == "ready")
+        ):
+            if brief.content.get("run_id") not in saved_ids:
+                doc = next(d for d in docs if d.id == brief.document_id)
+                runs.append(SimpleNamespace(question=f"Report brief — {doc.title}", response=brief.content))
     calculations = [c for r in runs for c in r.response.get("calculations", [])]
     body = generate_analysis_report(docs, runs, facts, calculations, request.format)
     types = {

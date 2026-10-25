@@ -19,10 +19,12 @@ services:
       args:
         INSTALL_ML: ${INSTALL_ML:-false}
     environment: &backend_env
+      APP_ENV: ${APP_ENV:-development}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       DATABASE_URL: postgresql+psycopg://filinglens:${POSTGRES_PASSWORD:-local-demo-password}@db:5432/filinglens
       STORAGE_DIR: /app/data/documents
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
-      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-500}
+      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-750}
       MAX_PAGE_TEXT_CHARS: ${MAX_PAGE_TEXT_CHARS:-250000}
       MAX_DOCUMENT_TEXT_CHARS: ${MAX_DOCUMENT_TEXT_CHARS:-10000000}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}

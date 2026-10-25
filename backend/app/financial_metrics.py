@@ -39,6 +39,7 @@ def clean_label(value):
     text = re.sub(r"\s+", " ", str(value or "")).strip().lower()
     text = re.sub(r"^\s*(?:\(?[ivx]+\)?[.)]?|\d+[.)])\s+", "", text)
     text = re.sub(r"^\s*(?:\([a-z]\)|[a-z][.)])\s*", "", text)
+    text = re.sub(r"\s+\d[\d,\s]*$", "", text)
     text = re.sub(r"\s*\((?:[ivx+\-\s]+|[0-9+\-\s]+)\)\s*$", "", text)
     return text.strip(" :.*†")
 
@@ -86,6 +87,8 @@ def column_context(headers, column, page_text, document):
         carried = None
         for cell in row[: column + 1]:
             label = clean_label(cell)
+            if "consolidated" in label and "standalone" in label:
+                return None
             if re.search(r"\bconsolidated\b", label):
                 carried = "consolidated"
             elif re.search(r"\bstandalone\b", label):

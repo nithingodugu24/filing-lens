@@ -153,26 +153,28 @@ def numerical_answers(db, request, evidence):
     return calculations
 
 
-def answer(db, request, history=None):
+def answer(db, request, history=None, retrieval_request=None):
     start = time.perf_counter()
     s = get_settings()
     confidence = None
     generation_used = False
     kind = question_kind(request.question)
-    from .metric_answers import resolve_metric_answer
+    from .metric_answers import resolve_metric_answer, unsupported_metric_answer
 
     financial = resolve_metric_answer(db, request) if kind == "answer" else None
+    if financial is None and kind == "answer":
+        financial = unsupported_metric_answer(db, request)
     context = context_answer(db, request, kind) if kind != "answer" else None
     if financial:
         evidence, embedding_usage = financial["evidence"], {}
-        claims, abstained, limitation = financial["claims"], False, financial["limitation"]
+        claims, abstained, limitation = financial["claims"], financial["abstained"], financial["limitation"]
         calculations = financial["calculations"]
     elif context:
         evidence, embedding_usage = context["evidence"], {}
         claims, abstained, limitation = context["claims"], context["abstained"], context["limitation"]
         calculations = []
     else:
-        evidence, embedding_usage = retrieve(db, request)
+        evidence, embedding_usage = retrieve(db, retrieval_request or request)
         claims, abstained, limitation = extractive_answer(request.question, evidence)
         calculations = numerical_answers(db, request, evidence)
     usage = {"embedding": embedding_usage, "generation": {}}
