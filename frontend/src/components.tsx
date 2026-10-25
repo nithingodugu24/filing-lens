@@ -1,3 +1,5 @@
+export { UploadModal } from "./upload";
+import { useDialog } from "./dialog";
 import React, { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -11,8 +13,6 @@ import {
   LoaderCircle,
   Search,
   ShieldCheck,
-  Upload,
-  X,
   ExternalLink,
   AlertCircle,
   PanelRightClose,
@@ -20,8 +20,8 @@ import {
 import {
   api,
   post,
-  period,
   number,
+  reportPeriod,
   type Calculation,
   type Document,
   type Evidence,
@@ -41,10 +41,10 @@ export function DocumentTable({
       <table className="document-table">
         <thead>
           <tr>
-            <th>DOCUMENT</th>
-            <th>COMPANY</th>
-            <th>PERIOD</th>
-            <th>STATUS</th>
+            <th>Report</th>
+            <th>Company</th>
+            <th>Period</th>
+            <th>Status</th>
             <th aria-label="Actions" />
           </tr>
         </thead>
@@ -64,7 +64,7 @@ export function DocumentTable({
                     {d.title}
                     <small>
                       {d.document_type.replaceAll("_", " ")} ·{" "}
-                      {d.synthetic ? "Synthetic demo" : d.basis} ·{" "}
+                      {d.synthetic ? "Made-up sample" : d.basis} ·{" "}
                       {d.page_count} pages
                     </small>
                   </span>
@@ -76,7 +76,7 @@ export function DocumentTable({
               <td>
                 <span className="table-company">{d.company}</span>
               </td>
-              <td>{period(d.period_end)}</td>
+              <td>{reportPeriod(d.period_start, d.period_end)}</td>
               <td>
                 <span className={`status ${d.status}`}>
                   {d.status === "indexed" ? (
@@ -86,7 +86,13 @@ export function DocumentTable({
                   ) : (
                     <Clock3 size={12} />
                   )}{" "}
-                  {d.status}
+                  {d.status === "indexed"
+                    ? "Ready"
+                    : d.status === "failed"
+                      ? "Needs attention"
+                      : d.status === "queued"
+                        ? "Waiting"
+                        : "Preparing"}
                 </span>
               </td>
               <td>
@@ -101,7 +107,7 @@ export function DocumentTable({
                     disabled={d.status !== "indexed"}
                     onClick={() => onOpen(d)}
                   >
-                    <ArrowUpRight size={17} />
+                    Open report <ArrowUpRight size={17} />
                   </button>
                 )}
               </td>
@@ -111,7 +117,7 @@ export function DocumentTable({
       </table>
       {!docs.length && (
         <div className="table-empty">
-          No documents match this scope. Adjust the filters or add a document.
+          No reports match your selection. Choose another company or period.
         </div>
       )}
     </div>
@@ -137,7 +143,7 @@ export function CalculationCard({
       <div className="calculation-title">
         <ChartNoAxesCombined size={17} />
         <strong>{c.company || "Metric comparison"}</strong>
-        <span>Calculated in Python</span>
+        <span>Calculated from checked figures</span>
       </div>
       <div className="calculation-result">
         {number(c.result)}
@@ -148,7 +154,11 @@ export function CalculationCard({
         {c.input_values.map((v, i) => (
           <div key={i}>
             <small>
-              {i === 0 ? "FIRST INPUT" : "SECOND INPUT"} · {v.period.fiscal}
+              {i === 0 ? "FIRST REPORT" : "SECOND REPORT"} ·{" "}
+              {reportPeriod(
+                v.period.calendar.split(" to ")[0],
+                v.period.calendar.split(" to ")[1],
+              )}
             </small>
             <strong>
               {v.currency === "PCT" ? "" : v.currency + " "}
@@ -161,14 +171,14 @@ export function CalculationCard({
         ))}
       </div>
       <details>
-        <summary>Normalised inputs</summary>
+        <summary>Show unit conversions</summary>
         <pre>{JSON.stringify(c.normalised_inputs, null, 2)}</pre>
       </details>
       <div className="citation-row">
         {sources.map((e, i) => (
           <button key={i} className="citation" onClick={() => onEvidence(e)}>
             <FileText size={13} />
-            {e.company} · PDF p. {e.page_index + 1}
+            Open {e.company} source · page {e.page_index + 1}
             <ArrowUpRight size={12} />
           </button>
         ))}
@@ -223,9 +233,9 @@ export function CompareView({
   return (
     <section className="compare-view">
       <div className="section-title">
-        <h2>Compare verified financial facts</h2>
+        <h2>Choose what to compare</h2>
         <span>
-          <ShieldCheck size={15} /> {eligible.length} reviewed facts in scope
+          <ShieldCheck size={15} /> {eligible.length} checked figures available
         </span>
       </div>
       <div className="compare-builder">
@@ -278,8 +288,8 @@ export function CompareView({
         </div>
         <div className="compare-pair">
           {[
-            { label: "First disclosure", value: first, set: setFirst },
-            { label: "Second disclosure", value: second, set: setSecond },
+            { label: "First report", value: first, set: setFirst },
+            { label: "Second report", value: second, set: setSecond },
           ].map((s, i) => (
             <React.Fragment key={s.label}>
               {i === 1 && (
@@ -302,8 +312,9 @@ export function CompareView({
                   )}
                   {eligible.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.company} · {period(f.period_end)} · {number(f.value)}{" "}
-                      {f.units} · {f.synthetic ? "synthetic" : f.basis}
+                      {f.company} · {reportPeriod(f.period_start, f.period_end)}{" "}
+                      · {number(f.value)} {f.units} ·{" "}
+                      {f.synthetic ? "synthetic" : f.basis}
                     </option>
                   ))}
                 </select>
@@ -325,7 +336,7 @@ export function CompareView({
           ) : (
             <ChartNoAxesCombined size={16} />
           )}
-          Calculate comparison
+          Compare numbers
         </button>
       </div>
       {result && (
@@ -334,16 +345,16 @@ export function CompareView({
       <div className="principle-note">
         <ShieldCheck size={21} />
         <div>
-          <strong>Comparable inputs come first.</strong>
+          <strong>We check the figures before comparing them.</strong>
           <p>
-            Currency, units, basis, reporting duration and revision status are
-            checked. Cross-company comparisons require matching dates.
-            Unreviewed facts stay out of calculations.
+            Both figures must use compatible dates, currency and reporting
+            rules. If no checked figures are available, look in My reports for
+            values to review. You can still ask questions about the report text.
           </p>
         </div>
       </div>
       <div className="section-title">
-        <h3>Facts available in this scope</h3>
+        <h3>Available figures — click to check the source</h3>
         <span>Original values retained</span>
       </div>
       <div className="fact-grid">
@@ -365,7 +376,7 @@ export function CompareView({
           >
             <div>
               {f.company}
-              <span>{period(f.period_end)}</span>
+              <span>{reportPeriod(f.period_start, f.period_end)}</span>
             </div>
             <strong>
               {number(f.value)}
@@ -398,10 +409,10 @@ export function FactReviewList({
   if (!facts.length) return null;
   return (
     <section className="fact-review">
-      <h3>Values awaiting source review</h3>
+      <h3>Check these numbers before comparing</h3>
       <p>
-        These are extraction candidates. Inspect the source, then record your
-        review.
+        These numbers were recognised automatically and may be wrong. Open the
+        report, check the value, period and units, then add a note to confirm.
       </p>
       {facts.map((f) => (
         <div key={f.id} className="review-row">
@@ -423,7 +434,7 @@ export function FactReviewList({
               });
             }}
           >
-            Inspect source
+            Check source
           </button>
         </div>
       ))}
@@ -477,6 +488,7 @@ export function EvidencePanel({
     } | null>(null),
     [error, setError] = useState(""),
     [pdf, setPdf] = useState(false);
+  const dialogRef = useDialog<HTMLElement>(onClose);
   useEffect(() => {
     setPage(null);
     setError("");
@@ -484,16 +496,10 @@ export function EvidencePanel({
       .then(setPage)
       .catch((err) => setError(err.message));
   }, [e.document_id, e.page_index]);
-  useEffect(() => {
-    function close(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [onClose]);
   return (
     <div className="panel-overlay" onClick={onClose}>
       <aside
+        ref={dialogRef}
         className="evidence-panel"
         role="dialog"
         aria-modal="true"
@@ -502,7 +508,7 @@ export function EvidencePanel({
       >
         <div className="panel-heading">
           <span>
-            <BookOpen size={18} /> Evidence reader
+            <BookOpen size={18} /> Source page
           </span>
           <button aria-label="Close evidence reader" onClick={onClose}>
             <PanelRightClose size={21} />
@@ -510,7 +516,9 @@ export function EvidencePanel({
         </div>
         <div className="panel-doc">
           <span className="eyebrow">
-            {e.synthetic ? "SYNTHETIC DEMO SOURCE" : "UPLOADED DISCLOSURE"}
+            {e.synthetic
+              ? "SAMPLE REPORT · MADE-UP DATA"
+              : "YOUR UPLOADED REPORT"}
           </span>
           <h2>{e.title}</h2>
           <div className="page-badge">
@@ -526,13 +534,13 @@ export function EvidencePanel({
             className={!pdf ? "selected" : ""}
             onClick={() => setPdf(false)}
           >
-            Extracted text
+            Read text
           </button>
           <button
             className={pdf ? "selected" : ""}
             onClick={() => setPdf(true)}
           >
-            PDF preview
+            View PDF
           </button>
           <a
             href={`/api/documents/${e.document_id}/file#page=${e.page_index + 1}`}
@@ -558,7 +566,7 @@ export function EvidencePanel({
                 <div className="reader-text">{page.text}</div>
                 {page.tables.length > 0 && (
                   <>
-                    <h3>Extracted tables</h3>
+                    <h3>Tables found on this page</h3>
                     {page.tables.map((t) => (
                       <div className="table-wrap" key={t.id}>
                         <table className="extracted-table">
@@ -595,251 +603,6 @@ export function EvidencePanel({
           labels may differ.
         </div>
       </aside>
-    </div>
-  );
-}
-export function UploadModal({
-  onClose,
-  onDone,
-  maxUploadMb,
-}: {
-  onClose: () => void;
-  onDone: () => Promise<void>;
-  maxUploadMb: number;
-}) {
-  const [file, setFile] = useState<File | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [meta, setMeta] = useState({
-      company: "",
-      title: "",
-      document_type: "quarterly_results",
-      period_start: "",
-      period_end: "",
-      publication_date: "",
-      source_url: "",
-      currency: "INR",
-      units: "crore",
-      basis: "consolidated",
-    });
-  const update = (key: string, value: string) =>
-    setMeta((m) => ({ ...m, [key]: value }));
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!file) return;
-    setError("");
-    setBusy(true);
-    try {
-      if (file.size > maxUploadMb * 1024 * 1024)
-        throw new Error(
-          `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The upload limit is ${maxUploadMb} MB.`,
-        );
-      const form = new FormData();
-      form.append("file", file);
-      form.append(
-        "metadata",
-        JSON.stringify({
-          ...meta,
-          publication_date: meta.publication_date || null,
-          source_url: meta.source_url || null,
-          units: meta.units || null,
-        }),
-      );
-      const result = await api<{ duplicate: boolean }>("/documents", {
-        method: "POST",
-        body: form,
-      });
-      if (result.duplicate) {
-        setError(
-          "This exact PDF is already in the library. Existing metadata was retained.",
-        );
-        return;
-      }
-      await onDone();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="modal-overlay">
-      <section
-        className="upload-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Add a document"
-      >
-        <div className="modal-heading">
-          <div>
-            <span className="eyebrow">GROW YOUR CORPUS</span>
-            <h2>Add a disclosure</h2>
-          </div>
-          <button aria-label="Close upload" onClick={onClose}>
-            <X size={21} />
-          </button>
-        </div>
-        <p>
-          Upload a digitally generated PDF. Metadata keeps evidence in the right
-          context.
-        </p>
-        {error && (
-          <div className="error" role="alert">
-            {error}
-          </div>
-        )}
-        <form onSubmit={(e) => void submit(e)}>
-          <label className="file-drop">
-            <Upload size={26} />
-            <strong>{file ? file.name : "Choose a PDF to upload"}</strong>
-            <span>
-              PDF only · Up to {maxUploadMb} MB · No scanned documents
-            </span>
-            {file && (
-              <span>{(file.size / (1024 * 1024)).toFixed(1)} MB selected</span>
-            )}
-            <input
-              type="file"
-              aria-label="PDF file"
-              accept="application/pdf,.pdf"
-              required
-              onChange={(e) => {
-                const selected = e.target.files?.[0] || null;
-                setFile(selected);
-                setError(
-                  selected && selected.size > maxUploadMb * 1024 * 1024
-                    ? `This PDF is ${(selected.size / (1024 * 1024)).toFixed(1)} MB. The upload limit is ${maxUploadMb} MB.`
-                    : "",
-                );
-              }}
-            />
-          </label>
-          <div className="form-grid">
-            <label>
-              Company
-              <input
-                aria-label="Company name"
-                required
-                maxLength={100}
-                value={meta.company}
-                onChange={(e) => update("company", e.target.value)}
-                placeholder="e.g. TCS"
-              />
-            </label>
-            <label>
-              Document type
-              <select
-                value={meta.document_type}
-                onChange={(e) => update("document_type", e.target.value)}
-              >
-                <option value="quarterly_results">Quarterly results</option>
-                <option value="annual_report">Annual report</option>
-                <option value="presentation">Investor presentation</option>
-                <option value="transcript">Earnings call transcript</option>
-              </select>
-            </label>
-            <label className="wide">
-              Document title
-              <input
-                required
-                maxLength={240}
-                value={meta.title}
-                onChange={(e) => update("title", e.target.value)}
-                placeholder="Company · Period · Disclosure"
-              />
-            </label>
-            <label>
-              Period start
-              <input
-                type="date"
-                required
-                value={meta.period_start}
-                onChange={(e) => update("period_start", e.target.value)}
-              />
-            </label>
-            <label>
-              Period end
-              <input
-                type="date"
-                required
-                min={meta.period_start}
-                value={meta.period_end}
-                onChange={(e) => update("period_end", e.target.value)}
-              />
-            </label>
-            <label>
-              Publication date (if known)
-              <input
-                type="date"
-                value={meta.publication_date}
-                onChange={(e) => update("publication_date", e.target.value)}
-              />
-            </label>
-            <label>
-              Reporting basis
-              <select
-                value={meta.basis}
-                onChange={(e) => update("basis", e.target.value)}
-              >
-                <option value="consolidated">Consolidated</option>
-                <option value="standalone">Standalone</option>
-              </select>
-            </label>
-            <label>
-              Currency
-              <select
-                value={meta.currency}
-                onChange={(e) => update("currency", e.target.value)}
-              >
-                {["INR", "USD", "EUR", "GBP"].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Units
-              <select
-                value={meta.units}
-                onChange={(e) => update("units", e.target.value)}
-              >
-                <option value="">Unknown</option>
-                {["unit", "lakh", "crore", "million", "billion"].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <label className="wide">
-              Official source URL (optional)
-              <input
-                type="url"
-                value={meta.source_url}
-                onChange={(e) => update("source_url", e.target.value)}
-                placeholder="https://…"
-              />
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="button secondary"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              className="button primary"
-              disabled={busy || !file || file.size > maxUploadMb * 1024 * 1024}
-            >
-              {busy ? (
-                <LoaderCircle size={16} className="spin" />
-              ) : (
-                <Upload size={16} />
-              )}{" "}
-              {busy ? "Uploading…" : "Upload & process"}
-            </button>
-          </div>
-        </form>
-      </section>
     </div>
   );
 }

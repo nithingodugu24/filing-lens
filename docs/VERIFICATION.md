@@ -61,3 +61,11 @@ The original 20 MiB limit rejected a user's annual report in the browser. The de
 - Six browser checks passed against the rebuilt Docker app. The new browser tests confirm a 21 MiB selection reaches the upload endpoint (intercepted response, no test document added to the user's library) and that a controlled 1 MiB limit produces immediate feedback and disables upload.
 - TypeScript/production builds and Python lint passed. The running service reports `max_upload_mb: 100`; the running proxy reports `client_max_body_size 101m`.
 - This verifies the size-limit fix using synthetic files. The user's actual annual-report PDF was not attached or processed in this follow-up.
+
+## Follow-up: simpler interface
+
+The interface now centres on Ask a question, My reports and Compare numbers. Decorative overview panels were removed, text and controls enlarged, technical options moved behind disclosures, and source-page actions made explicit. Uploads default to real user reports; sample data is a separate selection and is always marked as made up. Question requests set the corresponding synthetic-data filter, so the two corpora are not mixed by the UI.
+
+The shorter upload form derives the report name from the filename and offers financial-year/quarter presets, an editable date range, and optional metadata. An annual 2025–26 report gets 1 April 2025 to 31 March 2026. Annual and custom periods are displayed as a financial year or actual date range instead of being shown as a quarter. Dialogs support Escape, focus trapping and focus restoration. Changing the selected reports clears old answers.
+
+Ten browser checks cover uploads above 20 MiB, the configured size cap, annual/quarter/custom dates, first-time onboarding, failed-report guidance, questions and source pages, filters, calculations, mobile navigation, keyboard interaction and sample/uploaded-data separation. Upload and isolation checks use intercepted responses; no test reports were added to the user's library. The TypeScript and production builds passed. Backend code and the recorded evaluation algorithm were not changed by this interface revision.

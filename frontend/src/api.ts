@@ -34,6 +34,7 @@ export interface Evidence {
   text: string;
   synthetic: boolean;
   period_end?: string;
+  period_start?: string;
   kind?: string;
   printed_label?: string | null;
   source_url?: string | null;
@@ -112,4 +113,29 @@ export function period(date: string) {
 }
 export function number(value: string) {
   return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 4 });
+}
+
+export function reportPeriod(start: string | undefined, end: string) {
+  if (start) {
+    const startYear = Number(start.slice(0, 4)),
+      endYear = Number(end.slice(0, 4));
+    if (start.slice(5) === "04-01" && end === `${startYear + 1}-03-31`)
+      return `FY ${startYear}–${String(endYear).slice(-2)}`;
+    const quarters: { [key: string]: string } = {
+      "06-30": `${endYear}-04-01`,
+      "09-30": `${endYear}-07-01`,
+      "12-31": `${endYear}-10-01`,
+      "03-31": `${endYear}-01-01`,
+    };
+    if (quarters[end.slice(5)] !== start) {
+      const format = (d: string) =>
+        new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      return `${format(start)} – ${format(end)}`;
+    }
+  }
+  return period(end);
 }

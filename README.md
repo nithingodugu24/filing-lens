@@ -15,7 +15,7 @@ Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Choose **Load synthetic demo** and wait until the four PDFs are indexed. The worker extracts pages, tables and metric candidates. No API key or embedding-model download is required. Fonts are bundled locally. Initial dependency/image downloads require internet access.
+Open [http://localhost:5173](http://localhost:5173). Click **Upload report** to use your own PDF, or **Try with sample reports** to explore the four made-up examples. Wait for the report status to say **Ready**. Your uploads and sample reports are kept separate. No API key or embedding-model download is required. Fonts are bundled locally. Initial dependency/image downloads require internet access.
 
 - Interface: [localhost:5173](http://localhost:5173)
 - Interactive API: [localhost:5173/api/docs](http://localhost:5173/api/docs)
@@ -33,17 +33,18 @@ If `.env` already exists, retain your values. The defaults work without copying 
 - Extractive answers with clickable evidence, original PDF preview at the cited page, separate printed page labels and run diagnostics.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
 - Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
-- Responsive research desk, document library, empty/failure/loading states, metric comparisons and a method/evaluation page showing actual recorded measurements.
-- 34 backend tests, six browser checks, fixed evaluation labels/results and GitHub Actions configuration.
+- Three straightforward tabs: **Ask a question**, **My reports**, and **Compare numbers**. Larger text, clear status messages, source buttons, mobile navigation and keyboard-accessible dialogs.
+- A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
+- 34 backend tests, ten browser checks, fixed evaluation labels/results and GitHub Actions configuration.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 
 ## Try it
 
-1. Select **TCS**, both periods. Ask **What changed in operating margin between these quarters?**
+1. Select **Sample reports** under **Reports to use**, then **TCS**, both periods. Ask **What changed in operating margin between these quarters?**
 2. Inspect the invented 24% and 25% inputs and the +1 percentage-point result. Click a citation and open PDF page 1.
 3. Select both companies. Ask **Compare revenue growth for TCS and Infosys.** The fixture results are +2.5% and +4%.
-4. In **Compare metrics**, compare TCS margins in basis points: +100 bps.
+4. In **Compare numbers**, compare TCS margins in basis points: +100 bps.
 5. Ask **What is the share price?** The corpus cannot answer. Inspect harder failure cases in the evaluation report.
 
 Full [demo walkthrough](docs/DEMO.md) · [architecture and tradeoffs](docs/ARCHITECTURE.md) · [API guide](docs/API.md) · [source provenance](docs/PROVENANCE.md).
