@@ -10,6 +10,7 @@ from .finance import calculate
 from .models import Fact, QueryRun
 from .providers import ProviderError, fingerprint, request_provider
 from .retrieval import content_tokens, filtered_statement, retrieve
+from .question_context import context_answer, question_kind, SUGGESTIONS
 
 
 class GeneratedClaim(BaseModel):
@@ -117,11 +118,18 @@ def numerical_answers(db, request, evidence):
 def answer(db, request):
     start = time.perf_counter()
     s = get_settings()
-    evidence, embedding_usage = retrieve(db, request)
+    kind = question_kind(request.question)
+    context = context_answer(db, request, kind) if kind != "answer" else None
+    if context:
+        evidence, embedding_usage = context["evidence"], {}
+        claims, abstained, limitation = context["claims"], context["abstained"], context["limitation"]
+        calculations = []
+    else:
+        evidence, embedding_usage = retrieve(db, request)
+        claims, abstained, limitation = extractive_answer(request.question, evidence)
+        calculations = numerical_answers(db, request, evidence)
     usage = {"embedding": embedding_usage, "generation": {}}
-    claims, abstained, limitation = extractive_answer(request.question, evidence)
-    calculations = numerical_answers(db, request, evidence)
-    if s.answer_provider != "extractive" and claims:
+    if not context and s.answer_provider != "extractive" and claims:
         if s.answer_provider != "openai" or not s.answer_model:
             raise ProviderError("Configure a supported answer provider and model, or use extractive mode.")
         system = (
@@ -161,8 +169,8 @@ def answer(db, request):
                 "Provider returned an unsupported answer format. Try extractive mode."
             ) from None
     validate_claims(claims, evidence)
-    if not claims and not calculations:
-        limitation = "Insufficient evidence in the selected disclosures. Try a different period or upload a supporting document."
+    if not context and not claims and not calculations:
+        limitation = "I couldn't find supporting information in the selected reports. Try a more specific question or choose another report."
     latency = round((time.perf_counter() - start) * 1000, 2)
     cost = None
     if s.input_cost_per_million is not None and s.output_cost_per_million is not None:
@@ -180,7 +188,17 @@ def answer(db, request):
         "answer_provider": s.answer_provider,
         "answer_model": s.answer_model or None,
         "search_backend": db.bind.dialect.name,
+        "answer_kind": kind,
     }
+    if context:
+        configuration.update(
+            retrieval="saved_report_details_and_source_pages"
+            if kind == "report_overview"
+            else "not_required",
+            requested_retrieval=request.mode,
+            answer_provider="local_context",
+            answer_model=None,
+        )
     run = QueryRun(
         configuration=configuration,
         citation_ids=[e["id"] for e in evidence],
@@ -192,7 +210,11 @@ def answer(db, request):
     db.flush()
     return {
         "run_id": run.id,
-        "mode": s.answer_provider,
+        "mode": "extractive" if context else s.answer_provider,
+        "answer_kind": kind,
+        "summary": context["summary"] if context else "",
+        "report_overviews": context["report_overviews"] if context else [],
+        "suggestions": context["suggestions"] if context else (SUGGESTIONS if abstained else []),
         "claims": claims,
         "evidence": evidence,
         "calculations": calculations,

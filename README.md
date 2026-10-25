@@ -32,11 +32,12 @@ If `.env` already exists, retain your values. The defaults work without copying 
 - Annual-report processing removes artificial column-spacing before counting text limits, shows page progress, and keeps table chunks small enough for retrieval. Default budgets: 250,000 characters per page and 10,000,000 per report; configure `MAX_PAGE_TEXT_CHARS`, `MAX_DOCUMENT_TEXT_CHARS` and `MAX_PDF_PAGES` if needed.
 - Company/type/period/publication-cutoff filtering **before** keyword, cosine-vector or reciprocal-rank-fusion retrieval. Unknown publication dates are excluded by cutoff queries.
 - Extractive answers with clickable evidence, original PDF preview at the cited page, separate printed page labels and run diagnostics.
+- Simple prompts such as **What is this?** identify the selected report, dates and page count, with an opening-page link. Vague prompts ask for clarification; follow-up buttons help you choose a specific question. These local overviews use saved metadata and actual source pages, without model credentials.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
 - Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
 - Three straightforward tabs: **Ask a question**, **My reports**, and **Compare numbers**. Larger text, clear status messages, source buttons, mobile navigation and keyboard-accessible dialogs.
 - A shorter upload form with drag-and-drop, a report name taken from the filename, financial-year/quarter date presets, custom dates and optional metadata. Source reviews and technical search settings remain available when needed.
-- 41 backend tests, eleven browser checks, fixed evaluation labels/results and GitHub Actions configuration.
+- 50 backend tests, thirteen browser checks, fixed evaluation labels/results and GitHub Actions configuration.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 

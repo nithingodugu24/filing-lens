@@ -150,11 +150,11 @@ test("filters clear old results and unsupported question is clear", async ({
   await page.getByLabel("Your question").fill("What is the share price?");
   await page.getByRole("button", { name: "Find answer", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "This is not in these reports" }),
+    page.getByRole("heading", { name: "I couldn't find a supported answer" }),
   ).toBeVisible();
   await page.getByLabel("Period filter").selectOption("all");
   await expect(
-    page.getByRole("heading", { name: "This is not in these reports" }),
+    page.getByRole("heading", { name: "I couldn't find a supported answer" }),
   ).not.toBeVisible();
 });
 test("comparison shows source values and basis points", async ({ page }) => {

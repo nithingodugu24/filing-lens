@@ -477,7 +477,9 @@ function App() {
                               <span>
                                 {!searchable.length
                                   ? "No ready reports match your selection."
-                                  : "Answers will use only the reports selected above."}
+                                  : ready.answer_provider === "extractive"
+                                    ? "Works offline: explains report details and finds passages in the selected reports."
+                                    : "Answers will use only the reports selected above."}
                               </span>
                               <button
                                 className="button primary"
@@ -499,6 +501,10 @@ function App() {
                           <div className="example-questions">
                             <span>Try a question:</span>
                             {[
+                              {
+                                label: "What is this report?",
+                                text: "What is this report?",
+                              },
                               {
                                 label: "Compare revenue growth",
                                 text: questions[0],
@@ -596,9 +602,17 @@ function App() {
                           >
                             <div className="section-title">
                               <h2>
-                                {answer.abstained
-                                  ? "This is not in these reports"
-                                  : "Results from your reports"}
+                                {answer.answer_kind === "report_overview"
+                                  ? answer.report_overviews?.length === 1
+                                    ? "About this report"
+                                    : "About these reports"
+                                  : answer.answer_kind === "clarification"
+                                    ? "What would you like to understand?"
+                                    : answer.answer_kind === "help"
+                                      ? "How FilingLens can help"
+                                      : answer.abstained
+                                        ? "I couldn't find a supported answer"
+                                        : "Results from your reports"}
                               </h2>
                               <button
                                 className="text-button"
@@ -612,7 +626,52 @@ function App() {
                               </button>
                             </div>
                             <p className="asked-question">{asked}</p>
-                            {answer.abstained ? (
+                            {answer.summary && (
+                              <div className="reply-summary">
+                                <p>{answer.summary}</p>
+                              </div>
+                            )}
+                            {answer.report_overviews?.map((report) => {
+                              const evidence = evidenceById.get(
+                                report.citation_id,
+                              );
+                              return (
+                                <article
+                                  className="report-overview"
+                                  key={report.document_id}
+                                >
+                                  <h3>{report.title}</h3>
+                                  <p>
+                                    {report.company} ·{" "}
+                                    {reportPeriod(
+                                      report.period_start,
+                                      report.period_end,
+                                    )}{" "}
+                                    · {report.page_count} pages
+                                    {report.synthetic
+                                      ? " · Made-up sample"
+                                      : ""}
+                                  </p>
+                                  {evidence && (
+                                    <button
+                                      className="citation"
+                                      onClick={() => setSelected(evidence)}
+                                    >
+                                      <FileText size={16} />
+                                      Open report · page{" "}
+                                      {evidence.page_index + 1}
+                                      <ArrowRight size={14} />
+                                    </button>
+                                  )}
+                                </article>
+                              );
+                            })}
+                            {answer.answer_kind &&
+                            answer.answer_kind !== "answer" ? (
+                              <p className="context-explanation">
+                                {answer.limitation}
+                              </p>
+                            ) : answer.abstained ? (
                               <p className="abstention">{answer.limitation}</p>
                             ) : (
                               <>
@@ -683,6 +742,26 @@ function App() {
                                   </article>
                                 ))}
                               </>
+                            )}
+                            {!!answer.suggestions?.length && (
+                              <div className="answer-suggestions">
+                                <strong>
+                                  {answer.answer_kind === "report_overview"
+                                    ? "What would you like to explore?"
+                                    : "Try one of these questions"}
+                                </strong>
+                                {answer.suggestions.map((suggestion) => (
+                                  <button
+                                    className="suggestion-button"
+                                    key={suggestion}
+                                    disabled={busy}
+                                    onClick={() => void ask(suggestion)}
+                                  >
+                                    {suggestion}
+                                    <ArrowRight size={16} />
+                                  </button>
+                                ))}
+                              </div>
                             )}
                             <details className="run-details">
                               <summary>Sources and technical details</summary>

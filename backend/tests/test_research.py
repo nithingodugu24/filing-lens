@@ -76,7 +76,7 @@ def test_question_evidence_workflow(client, corpus):
 
 def test_unsupported_and_conflict(client, corpus):
     unknown = client.post("/api/questions", json={"question": "What is the share price?"}).json()
-    assert unknown["abstained"] and "Insufficient" in unknown["limitation"]
+    assert unknown["abstained"] and "supporting information" in unknown["limitation"]
     conflict = client.post(
         "/api/questions",
         json={

@@ -79,6 +79,20 @@ export interface Calculation {
 export interface Answer {
   run_id: string;
   mode: string;
+  answer_kind?: "answer" | "report_overview" | "clarification" | "help";
+  summary?: string;
+  report_overviews?: {
+    document_id: string;
+    title: string;
+    company: string;
+    document_type: string;
+    period_start: string;
+    period_end: string;
+    page_count: number;
+    synthetic: boolean;
+    citation_id: string;
+  }[];
+  suggestions?: string[];
   claims: { text: string; citation_ids: string[]; kind: string }[];
   evidence: Evidence[];
   calculations: Calculation[];
