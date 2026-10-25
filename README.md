@@ -27,14 +27,14 @@ If `.env` already exists, retain your values. The defaults work without copying 
 
 ## What works
 
-- Upload digital PDFs up to 20 MB / 500 pages, with explicit company, type, reporting dates, publication date, currency, units, basis and optional official URL.
+- Upload digital PDFs up to 100 MB / 500 pages, with explicit company, type, reporting dates, publication date, currency, units, basis and optional official URL. The interface reads the configured limit from the API and shows selected file size.
 - SHA-256 duplicate detection, retryable background jobs, page-bounded text extraction and grid-table extraction. Scanned, empty, encrypted, damaged and poorly extracted PDFs fail clearly.
 - Company/type/period/publication-cutoff filtering **before** keyword, cosine-vector or reciprocal-rank-fusion retrieval. Unknown publication dates are excluded by cutoff queries.
 - Extractive answers with clickable evidence, original PDF preview at the cited page, separate printed page labels and run diagnostics.
 - Optional OpenAI-compatible embedding/generation adapters with bounded retries, timeouts, configuration fingerprints, citation-ID checks and literal supporting-quote checks.
 - Source-review workflow for narrowly recognised financial candidates. Deterministic `Decimal` calculations handle lakh/crore/million conversions, revenue percentage change, margin percentage-point/basis-point changes, basis/revision/currency/duration compatibility and zero denominators.
 - Responsive research desk, document library, empty/failure/loading states, metric comparisons and a method/evaluation page showing actual recorded measurements.
-- 32 backend tests, four browser workflows, fixed evaluation labels/results and GitHub Actions configuration.
+- 34 backend tests, six browser checks, fixed evaluation labels/results and GitHub Actions configuration.
 
 The app accepts additional companies and reporting periods through metadata without code changes. Document types are quarterly results, annual report, investor presentation and transcript. This describes digital text/table ingestion, not universal extraction of correct financial facts from all layouts.
 

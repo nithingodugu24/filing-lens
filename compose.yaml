@@ -18,6 +18,7 @@ services:
     environment: &backend_env
       DATABASE_URL: postgresql+psycopg://filinglens:${POSTGRES_PASSWORD:-local-demo-password}@db:5432/filinglens
       STORAGE_DIR: /app/data/documents
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-hash-v1}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-256}

@@ -19,3 +19,5 @@ Commit messages:
 6. `Add setup guide and final demo checks`
 
 Known boundaries: official PDF downloads returned HTTP 403, real-filings quality and live paid providers are unverified, independent human review is pending, and the extractive baseline fails two overlapping-vocabulary unsupported questions. These are documented limitations, not completed future capabilities.
+
+Follow-up commit: `Allow bigger annual report uploads` — default 100 MiB, consistent UI/API/proxy limits, immediate size feedback, and two additional backend and browser checks. Current verification totals: 34 backend tests and six browser checks.

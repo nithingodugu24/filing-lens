@@ -1,3 +1,7 @@
+export interface RuntimeInfo {
+  answer_provider: string;
+  max_upload_mb: number;
+}
 export interface Document {
   id: string;
   title: string;

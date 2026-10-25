@@ -17,11 +17,15 @@ class ExtractionError(ValueError):
     pass
 
 
+class UploadTooLarge(ValueError):
+    pass
+
+
 def enqueue(db, content: bytes, metadata: DocumentMetadata, synthetic=False):
     if not content.startswith(b"%PDF-"):
         raise ValueError("Only PDF files are supported. The file header is invalid.")
     if len(content) > get_settings().max_upload_mb * 1024 * 1024:
-        raise ValueError("PDF exceeds the 20 MB upload limit.")
+        raise UploadTooLarge(f"PDF exceeds the {get_settings().max_upload_mb} MB upload limit.")
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalar(select(Document).where(Document.sha256 == digest))
     if existing:

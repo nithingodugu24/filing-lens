@@ -117,3 +117,38 @@ def test_provider_failure_rolls_back_and_retries(db, monkeypatch):
     assert db.scalar(select(Chunk)) is None and db.scalar(select(Page)) is None
     job = db.scalar(select(Job))
     assert job.attempts == 1 and "timed out" in job.error
+
+
+def test_annual_report_larger_than_old_limit_indexes(client, db):
+    # Valid PDF with a large metadata stream, keeping text extraction small and deterministic.
+    with pymupdf.open(stream=make_pdf(FIXTURES[0]), filetype="pdf") as pdf:
+        pdf.set_xml_metadata("<synthetic-test>" + "x" * (21 * 1024 * 1024) + "</synthetic-test>")
+        content = pdf.tobytes(deflate=False)
+    assert len(content) > 20 * 1024 * 1024
+    assert client.get("/api/ready").json()["max_upload_mb"] == 100
+    response = client.post(
+        "/api/documents",
+        data={"metadata": metadata().model_dump_json()},
+        files={"file": ("large-annual-report.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 202, response.text
+    document_id = response.json()["document"]["id"]
+    db.commit()
+    run_one()
+    db.expire_all()
+    assert db.get(Document, document_id).status == "indexed"
+
+
+def test_configured_upload_limit_returns_413(client):
+    from app.config import get_settings
+
+    get_settings().max_upload_mb = 1
+    assert client.get("/api/ready").json()["max_upload_mb"] == 1
+    content = b"%PDF-1.7\n" + b"x" * (1024 * 1024)
+    response = client.post(
+        "/api/documents",
+        data={"metadata": metadata().model_dump_json()},
+        files={"file": ("large.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 413 and "1 MB" in response.json()["detail"]
+    assert client.post("/api/documents", content=b"x" * (2 * 1024 * 1024 + 1)).status_code == 413

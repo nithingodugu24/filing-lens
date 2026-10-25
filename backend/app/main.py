@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import get_settings
 from .db import engine, get_db, init_db
 from .demo import seed_demo, verify_demo_facts
-from .ingestion import enqueue
+from .ingestion import UploadTooLarge, enqueue
 from .models import Chunk, Document, ExtractedTable, Fact, Job, Page, WorkerState
 from .schemas import CompareRequest, DocumentMetadata, FactReview, SearchRequest
 from .answers import answer
@@ -116,6 +116,13 @@ async def provider_error(request, error):
     )
 
 
+@app.exception_handler(UploadTooLarge)
+async def upload_too_large(request, error):
+    return JSONResponse(
+        {"detail": str(error), "request_id": getattr(request.state, "request_id", None)}, status_code=413
+    )
+
+
 @app.exception_handler(SQLAlchemyError)
 async def database_unavailable(request, error):
     request_id = getattr(request.state, "request_id", None)
@@ -156,6 +163,7 @@ def ready(db: Session = Depends(get_db)):
         "embedding_provider": s.embedding_provider,
         "embedding_model": s.embedding_model,
         "embedding_dimensions": s.embedding_dimensions,
+        "max_upload_mb": s.max_upload_mb,
         "mode": "extractive offline demo" if s.answer_provider == "extractive" else "generative provider",
     }
 

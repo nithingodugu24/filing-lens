@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     provider_timeout: float = 30
     input_cost_per_million: float | None = None
     output_cost_per_million: float | None = None
-    max_upload_mb: int = 20
+    max_upload_mb: int = Field(default=100, ge=1, le=100)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 

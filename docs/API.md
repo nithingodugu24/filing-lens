@@ -45,7 +45,7 @@ Research request:
 }
 ```
 
-Filters are applied before ranking. Cutoff queries exclude unknown publication dates. For an “as of” question, set `publication_cutoff` explicitly using the interface's **As of** field; natural-language date parsing is not implemented. `k` ranges from 1 to 20. Questions are capped at 2,000 characters; JSON request bodies at 64 KiB. Upload requests are capped at 21 MiB including multipart overhead and PDF payloads at 20 MiB.
+Filters are applied before ranking. Cutoff queries exclude unknown publication dates. For an “as of” question, set `publication_cutoff` explicitly using the interface's **As of** field; natural-language date parsing is not implemented. `k` ranges from 1 to 20. Questions are capped at 2,000 characters; JSON request bodies at 64 KiB. PDF payloads default to 100 MiB, configurable with `MAX_UPLOAD_MB` from 1–100. The API allows another 1 MiB for multipart overhead; the proxy permits up to 101 MiB. `/api/ready` exposes `max_upload_mb` so the interface validates against the same setting. Oversized PDF payloads and request bodies return HTTP 413.
 
 Question responses include `claims`, retrieved `evidence`, `calculations`, `abstained`, `limitation`, `configuration`, `latency_ms`, provider `usage`, optional configured `cost_usd`, and a persistent `run_id`. Citation IDs are actual chunk IDs and have document/page metadata. Generated quotation validation establishes literal traceability, not semantic support. Missing provider usage is `{}`, not an invented token count. Cost is null when pricing is absent.
 

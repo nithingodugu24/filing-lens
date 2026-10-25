@@ -33,6 +33,7 @@ import {
   type Document,
   type Evidence,
   type Fact,
+  type RuntimeInfo,
 } from "./api";
 import {
   CalculationCard,
@@ -75,7 +76,7 @@ function App() {
   const [view, setView] = useState<View>("research"),
     [docs, setDocs] = useState<Document[]>([]),
     [facts, setFacts] = useState<Fact[]>([]),
-    [ready, setReady] = useState<Record<string, string>>({});
+    [ready, setReady] = useState<Partial<RuntimeInfo>>({});
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
@@ -95,7 +96,7 @@ function App() {
       const [d, f, r] = await Promise.all([
         api<Document[]>("/documents"),
         api<Fact[]>("/facts"),
-        api<Record<string, string>>("/ready"),
+        api<RuntimeInfo>("/ready"),
       ]);
       setDocs(d);
       setFacts(f);
@@ -729,8 +730,8 @@ function App() {
                     onRetry={retry}
                   />
                   <p className="footnote">
-                    Digital PDFs · Up to 20 MB / 500 pages · Scanned documents
-                    need OCR before upload
+                    Digital PDFs · Up to {ready.max_upload_mb ?? 100} MB / 500
+                    pages · Scanned documents need OCR before upload
                   </p>
                   <FactReviewList
                     facts={filteredFacts.filter((f) => !f.verified)}
@@ -765,6 +766,7 @@ function App() {
       )}
       {upload && (
         <UploadModal
+          maxUploadMb={ready.max_upload_mb ?? 100}
           onClose={() => setUpload(false)}
           onDone={async () => {
             setUpload(false);

@@ -52,3 +52,12 @@ Exact transitive dependencies are in the Python requirements locks and `frontend
 - [Independent review worksheet](../evaluation/HUMAN_REVIEW.md)
 
 No paid provider calls were made. Provider tests use controlled responses, timeouts and rate-limit simulations. Citation checks establish source identity and literal-quote matching; they cannot establish semantic entailment. Synthetic-corpus performance should not be presented as real-disclosure research accuracy.
+
+## Follow-up: larger annual-report uploads
+
+The original 20 MiB limit rejected a user's annual report in the browser. The default is now 100 MiB, configurable from 1–100 via `MAX_UPLOAD_MB`. The proxy permits 101 MiB including multipart overhead; the API publishes its payload limit through readiness, and the interface reads it instead of hard-coding a separate cap. Oversized payloads return HTTP 413; the interface shows selected size and immediate feedback.
+
+- 34 backend tests passed on SQLite and PostgreSQL. A valid PDF with a metadata stream above 20 MiB was uploaded through the API and indexed; a configured 1 MiB cap rejected an oversized PDF with HTTP 413.
+- Six browser checks passed against the rebuilt Docker app. The new browser tests confirm a 21 MiB selection reaches the upload endpoint (intercepted response, no test document added to the user's library) and that a controlled 1 MiB limit produces immediate feedback and disables upload.
+- TypeScript/production builds and Python lint passed. The running service reports `max_upload_mb: 100`; the running proxy reports `client_max_body_size 101m`.
+- This verifies the size-limit fix using synthetic files. The user's actual annual-report PDF was not attached or processed in this follow-up.

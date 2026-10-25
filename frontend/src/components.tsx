@@ -601,9 +601,11 @@ export function EvidencePanel({
 export function UploadModal({
   onClose,
   onDone,
+  maxUploadMb,
 }: {
   onClose: () => void;
   onDone: () => Promise<void>;
+  maxUploadMb: number;
 }) {
   const [file, setFile] = useState<File | null>(null),
     [busy, setBusy] = useState(false),
@@ -628,8 +630,10 @@ export function UploadModal({
     setError("");
     setBusy(true);
     try {
-      if (file.size > 20 * 1024 * 1024)
-        throw new Error("Select a PDF under 20 MB.");
+      if (file.size > maxUploadMb * 1024 * 1024)
+        throw new Error(
+          `This PDF is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The upload limit is ${maxUploadMb} MB.`,
+        );
       const form = new FormData();
       form.append("file", file);
       form.append(
@@ -688,13 +692,26 @@ export function UploadModal({
           <label className="file-drop">
             <Upload size={26} />
             <strong>{file ? file.name : "Choose a PDF to upload"}</strong>
-            <span>PDF only · Up to 20 MB · No scanned documents</span>
+            <span>
+              PDF only · Up to {maxUploadMb} MB · No scanned documents
+            </span>
+            {file && (
+              <span>{(file.size / (1024 * 1024)).toFixed(1)} MB selected</span>
+            )}
             <input
               type="file"
               aria-label="PDF file"
               accept="application/pdf,.pdf"
               required
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const selected = e.target.files?.[0] || null;
+                setFile(selected);
+                setError(
+                  selected && selected.size > maxUploadMb * 1024 * 1024
+                    ? `This PDF is ${(selected.size / (1024 * 1024)).toFixed(1)} MB. The upload limit is ${maxUploadMb} MB.`
+                    : "",
+                );
+              }}
             />
           </label>
           <div className="form-grid">
@@ -809,7 +826,10 @@ export function UploadModal({
             >
               Cancel
             </button>
-            <button className="button primary" disabled={busy || !file}>
+            <button
+              className="button primary"
+              disabled={busy || !file || file.size > maxUploadMb * 1024 * 1024}
+            >
               {busy ? (
                 <LoaderCircle size={16} className="spin" />
               ) : (
