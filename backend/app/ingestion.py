@@ -13,6 +13,12 @@ from .providers import ProviderError, embed, fingerprint
 from .schemas import DocumentMetadata
 
 
+def status_event(db, document_id, **payload):
+    from .models import StatusEvent
+
+    db.add(StatusEvent(document_id=document_id, payload={"document_id": document_id, **payload}))
+
+
 class ExtractionError(ValueError):
     pass
 
@@ -27,7 +33,9 @@ def enqueue(db, content: bytes, metadata: DocumentMetadata, synthetic=False):
     if len(content) > get_settings().max_upload_mb * 1024 * 1024:
         raise UploadTooLarge(f"PDF exceeds the {get_settings().max_upload_mb} MB upload limit.")
     digest = hashlib.sha256(content).hexdigest()
-    existing = db.scalar(select(Document).where(Document.sha256 == digest))
+    owner = db.info.get("user_id")
+    key = hashlib.sha256(f"{owner}|{digest}".encode()).hexdigest() if owner else digest
+    existing = db.scalar(select(Document).where(Document.sha256 == digest, Document.user_id == owner))
     if existing:
         return existing, True
     folder = get_settings().storage_dir
@@ -37,15 +45,24 @@ def enqueue(db, content: bytes, metadata: DocumentMetadata, synthetic=False):
     path.write_bytes(content)
     values = metadata.model_dump(mode="python")
     values["source_url"] = str(metadata.source_url) if metadata.source_url else None
-    document = Document(id=uid(), **values, synthetic=synthetic, sha256=digest, path=str(path.resolve()))
+    document = Document(
+        id=uid(),
+        **values,
+        synthetic=synthetic,
+        sha256=digest,
+        dedup_key=key,
+        path=str(path.resolve()),
+        user_id=owner,
+    )
     try:
         with db.begin_nested():
             db.add(document)
             db.flush()
             db.add(Job(document_id=document.id))
+            status_event(db, document.id, type="document_status", status="queued", progress=None)
             db.flush()
     except IntegrityError:
-        existing = db.scalar(select(Document).where(Document.sha256 == digest))
+        existing = db.scalar(select(Document).where(Document.dedup_key == key))
         if existing:
             return existing, True
         raise
@@ -245,6 +262,15 @@ def record_progress(job_id, document_id, completed, total, stage):
             if stage == "reading"
             else f"All {total} pages read. Preparing them for search…"
         )
+        status_event(
+            db,
+            document_id,
+            type="extraction_progress",
+            status="processing",
+            completed=completed,
+            total=total,
+            progress=document.warning,
+        )
         state = db.get(WorkerState, "main")
         if state:
             state.last_seen = now()
@@ -283,6 +309,9 @@ def run_one():
             return False
         document_id, job_id = job.document_id, job.id
         db.get(Document, document_id).status = "processing"
+        status_event(
+            db, document_id, type="document_status", status="processing", progress="Preparing report"
+        )
     try:
         with session_scope() as db:
             process_document(
@@ -294,6 +323,21 @@ def run_one():
             )
             job = db.get(Job, job_id)
             job.status, job.error, job.lease_until = "complete", None, None
+            status_event(
+                db,
+                document_id,
+                type="job_complete",
+                status="indexed",
+                page_count=db.get(Document, document_id).page_count,
+                progress=None,
+            )
+            from .analysis_jobs import enqueue_analysis
+
+            settings = get_settings()
+            if settings.sentiment_enabled:
+                enqueue_analysis(db, document_id, "sentiment")
+            if settings.ner_enabled:
+                enqueue_analysis(db, document_id, "entities")
     except Exception as error:
         with session_scope() as db:
             job = db.get(Job, job_id)
@@ -308,6 +352,7 @@ def run_one():
             job.lease_until = None
             document = db.get(Document, document_id)
             document.status, document.warning = job.status, job.error
+            status_event(db, document_id, type="document_status", status=job.status, progress=job.error)
         if not isinstance(error, (ExtractionError, ProviderError)):
             import logging
 

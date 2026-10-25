@@ -3,6 +3,19 @@
 import math
 import statistics
 from decimal import Decimal
+from functools import lru_cache
+
+
+@lru_cache(maxsize=1)
+def bert_scorer():
+    from bert_score import BERTScorer
+
+    return BERTScorer(
+        model_type="distilbert-base-uncased",
+        lang="en",
+        device="cpu",
+        rescale_with_baseline=False,
+    )
 
 
 class RetrievalEvaluator:
@@ -61,15 +74,9 @@ class AnswerEvaluator:
         except ImportError:
             pass
         if bert and predicted:
-            from bert_score import score
-
-            _, _, f1 = score(
+            _, _, f1 = bert_scorer().score(
                 [predicted],
                 [expected],
-                model_type="distilbert-base-uncased",
-                lang="en",
-                verbose=False,
-                device="cpu",
             )
             scores["bertscore"] = float(f1[0])
         evidence = {e["id"]: e for e in result["evidence"]}

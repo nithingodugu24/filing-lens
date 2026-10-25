@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     embedding_dimensions: int = Field(default=256, ge=32, le=2000)
     answer_provider: str = "extractive"
     answer_model: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    sentiment_enabled: bool = False
+    ner_enabled: bool = False
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = Field(default=60, ge=5, le=1440)
     provider_api_key: str = ""
     provider_base_url: str = "https://api.openai.com/v1"
     provider_timeout: float = 30

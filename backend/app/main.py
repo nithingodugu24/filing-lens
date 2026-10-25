@@ -23,6 +23,12 @@ from .answers import answer
 from .finance import compare_facts
 from .providers import ProviderError
 from .retrieval import retrieve
+from .conversations import router as conversation_router
+from .analysis_jobs import router as analysis_router
+from .auth import router as auth_router
+from .export import router as export_router
+from .annotations import router as annotation_router
+from .websocket import router as event_router
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("filinglens")
@@ -45,8 +51,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins.split(","),
-    allow_methods=["GET", "POST", "PATCH"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -78,6 +84,13 @@ class BodyLimitMiddleware:
 
 
 app.add_middleware(BodyLimitMiddleware)
+
+app.include_router(conversation_router)
+app.include_router(analysis_router)
+app.include_router(auth_router)
+app.include_router(export_router)
+app.include_router(annotation_router)
+app.include_router(event_router)
 
 
 @app.middleware("http")
@@ -296,11 +309,21 @@ def facts(db: Session = Depends(get_db)):
     return result
 
 
+@app.get("/api/analytics", tags=["Analytics"])
+def get_analytics(synthetic: bool | None = None, db: Session = Depends(get_db)):
+    """Return checked financial series; synthetic and uploaded sources can be filtered separately."""
+    from .analytics import analytics
+
+    verify_demo_facts(db)
+    return analytics(db, synthetic)
+
+
 @app.patch("/api/facts/{fact_id}")
 def review_fact(fact_id: str, review: FactReview, db: Session = Depends(get_db)):
     fact = db.get(Fact, fact_id)
     if not fact:
         raise HTTPException(404, "Fact not found")
+    require_document(db, fact.document_id)
     fact.verified, fact.review_note = review.verified, review.note
     if review.revision:
         fact.revision = review.revision
