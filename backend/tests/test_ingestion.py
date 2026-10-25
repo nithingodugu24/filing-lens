@@ -9,8 +9,14 @@ from app.schemas import DocumentMetadata
 
 
 def metadata():
-    return DocumentMetadata(company="TCS", title="Test document", document_type="quarterly_results",
-                            period_start="2025-04-01", period_end="2025-06-30", basis="consolidated")
+    return DocumentMetadata(
+        company="TCS",
+        title="Test document",
+        document_type="quarterly_results",
+        period_start="2025-04-01",
+        period_end="2025-06-30",
+        basis="consolidated",
+    )
 
 
 def test_duplicate_hash_and_filename_independent(db):
@@ -65,8 +71,49 @@ def test_broken_pdf(tmp_path):
 
 
 def test_upload_metadata_and_request_limits(client):
-    assert client.post("/api/documents", data={"metadata": "{}"},
-                       files={"file": ("x.pdf", b"%PDF-test", "application/pdf")}).status_code == 422
+    assert (
+        client.post(
+            "/api/documents",
+            data={"metadata": "{}"},
+            files={"file": ("x.pdf", b"%PDF-test", "application/pdf")},
+        ).status_code
+        == 422
+    )
     assert client.post("/api/demo", content=b"x" * 65537).status_code == 413
     response = client.get("/api/health")
     assert response.headers["X-Request-ID"]
+
+
+def test_valid_upload_and_malicious_filename(client, db):
+    content = make_pdf(FIXTURES[0])
+    response = client.post(
+        "/api/documents",
+        data={"metadata": metadata().model_dump_json()},
+        files={"file": ("../../escape.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 202, response.text
+    doc = response.json()["document"]
+    stored = db.get(Document, doc["id"])
+    assert stored.path.endswith(f"{stored.sha256}.pdf")
+    assert "escape" not in stored.path
+    run_one()
+    response = client.get(f"/api/documents/{doc['id']}/file")
+    assert response.status_code == 200 and response.content.startswith(b"%PDF-")
+
+
+def test_provider_failure_rolls_back_and_retries(db, monkeypatch):
+    from app.providers import ProviderError
+
+    doc, _ = enqueue(db, make_pdf(FIXTURES[0]), metadata())
+    db.commit()
+
+    def unavailable(*args):
+        raise ProviderError("Provider timed out")
+
+    monkeypatch.setattr("app.ingestion.embed", unavailable)
+    run_one()
+    db.expire_all()
+    assert db.get(Document, doc.id).status == "queued"
+    assert db.scalar(select(Chunk)) is None and db.scalar(select(Page)) is None
+    job = db.scalar(select(Job))
+    assert job.attempts == 1 and "timed out" in job.error

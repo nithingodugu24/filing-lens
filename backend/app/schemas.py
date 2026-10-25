@@ -49,3 +49,4 @@ class CompareRequest(BaseModel):
 class FactReview(BaseModel):
     verified: bool
     note: str = Field(min_length=12, max_length=500)
+    revision: Literal["original", "restated"] | None = None

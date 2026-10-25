@@ -1,0 +1,51 @@
+{
+  "run_at_utc": "2026-10-25T05:14:11.875704+00:00",
+  "k": 6,
+  "database": "postgresql",
+  "embedding": "local:hash-v1:256",
+  "summaries": [
+    {
+      "mode": "keyword",
+      "split": "held_out",
+      "questions": 10,
+      "recall_at_k": 0.9643,
+      "citation_valid": 1,
+      "quote_support": 1,
+      "numerical_correct": 0.6667,
+      "abstention_correct": 0.8,
+      "conflict_flagged": 1,
+      "unsupported_abstention_rate": 0.5,
+      "latency_median_ms": 8.2,
+      "latency_p95_ms": 24.19
+    },
+    {
+      "mode": "vector",
+      "split": "held_out",
+      "questions": 10,
+      "recall_at_k": 1.0,
+      "citation_valid": 1,
+      "quote_support": 1,
+      "numerical_correct": 1,
+      "abstention_correct": 0.8,
+      "conflict_flagged": 1,
+      "unsupported_abstention_rate": 0.5,
+      "latency_median_ms": 13.66,
+      "latency_p95_ms": 28.99
+    },
+    {
+      "mode": "hybrid",
+      "split": "held_out",
+      "questions": 10,
+      "recall_at_k": 1.0,
+      "citation_valid": 1,
+      "quote_support": 1,
+      "numerical_correct": 1,
+      "abstention_correct": 0.8,
+      "conflict_flagged": 1,
+      "unsupported_abstention_rate": 0.5,
+      "latency_median_ms": 17.32,
+      "latency_p95_ms": 41.39
+    }
+  ],
+  "limitations": "10 synthetic held-out questions; agent-authored labels, no independent human review. Exact quotation support is not semantic entailment. Unsupported-question abstention is only 50%."
+}

@@ -1,0 +1,58 @@
+name: Check app
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg17
+        env:
+          POSTGRES_USER: filinglens
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: filinglens_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U filinglens -d filinglens_test" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://filinglens:test-password@127.0.0.1:5432/filinglens_test
+      TEST_DATABASE_URL: postgresql+psycopg://filinglens:test-password@127.0.0.1:5432/filinglens_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22.19.0', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - name: Install backend
+        run: |
+          pip install -r backend/requirements-dev.lock
+          pip install --no-deps -e backend
+      - name: Check backend on PostgreSQL
+        run: |
+          ruff check backend evaluation
+          pytest backend/tests -q
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Seed and evaluate the synthetic corpus
+        run: |
+          python -m app.demo
+          python evaluation/run.py --output evaluation/results/ci-run.json
+      - name: Start app and verify browser workflows
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/filinglens-api.log 2>&1 &
+          python -m app.worker > /tmp/filinglens-worker.log 2>&1 &
+          (cd frontend && npm run dev > /tmp/filinglens-ui.log 2>&1) &
+          python scripts/wait_for_app.py
+          cd frontend
+          npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-results
+          path: |
+            evaluation/results/ci-run.json
+            frontend/test-results/
