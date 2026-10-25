@@ -1,7 +1,7 @@
 # Build stages
 
-1. App setup — runnable API and React app, pinned dependencies.
-2. Document processing — storage, uploads, worker, extraction and synthetic corpus.
+1. App setup — complete. API health test and frontend production build passed; frontend audit clean.
+2. Document processing — complete. Seven backend tests passed; four synthetic PDFs processed with page and table extraction. PostgreSQL integration checked during delivery.
 3. Research engine — filtered retrieval, provider adapters, cited answers and calculations.
 4. Research interface — document library, evidence reader, questions and comparisons.
 5. Evaluation — tests, fixed development and held-out sets, actual measurements.

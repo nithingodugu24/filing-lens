@@ -1,0 +1,45 @@
+name: filinglens
+services:
+  db:
+    image: pgvector/pgvector:0.8.0-pg17
+    environment:
+      POSTGRES_USER: filinglens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-demo-password}
+      POSTGRES_DB: filinglens
+    ports: ["127.0.0.1:5438:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filinglens -d filinglens"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  backend:
+    build: ./backend
+    environment: &backend_env
+      DATABASE_URL: postgresql+psycopg://filinglens:${POSTGRES_PASSWORD:-local-demo-password}@db:5432/filinglens
+      STORAGE_DIR: /app/data/documents
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-hash-v1}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-256}
+      ANSWER_PROVIDER: ${ANSWER_PROVIDER:-extractive}
+      ANSWER_MODEL: ${ANSWER_MODEL:-}
+      PROVIDER_API_KEY: ${PROVIDER_API_KEY:-}
+      PROVIDER_BASE_URL: ${PROVIDER_BASE_URL:-https://api.openai.com/v1}
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["documents:/app/data"]
+    depends_on:
+      db: {condition: service_healthy}
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment: *backend_env
+    volumes: ["documents:/app/data"]
+    depends_on:
+      backend: {condition: service_started}
+  frontend:
+    build: ./frontend
+    ports: ["127.0.0.1:5173:80"]
+    depends_on: [backend]
+volumes:
+  postgres_data:
+  documents:
